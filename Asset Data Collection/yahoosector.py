@@ -1,4 +1,4 @@
-from urllib2 import urlopen
+import requests
 from bs4 import BeautifulSoup
 import time
 import re
@@ -6,10 +6,24 @@ import MySQLdb as mdb
 import datetime
 from math import ceil
 
+def getPageData(url):
+	success = False
+	#Keep trying until status code is 200
+	while not success:
+		response = requests.get(url)
+		try:
+			response.raise_for_status()
+			success = True
+		except requests.exceptions.HTTPError as e:
+			#Wait before trying again
+			print 'retrying ' + url
+			time.sleep(10)
+	return response.text
+
 def getSectors():
 	yahoolink = 'http://biz.yahoo.com/p/'
-	page = urlopen(yahoolink)
-	soup = BeautifulSoup(page.read(), 'lxml')
+	pagedata = getPageData(yahoolink)
+	soup = BeautifulSoup(pagedata, 'lxml')
 
 	#Get all sectors
 	sectorlinks = {}
@@ -28,8 +42,8 @@ def getIndustries(sectorlinks):
 	for sector in sectorlinks.keys():
 		print yahoolink+sectorlinks[sector]
 		time.sleep(2)
-		sectorpage = urlopen(yahoolink+sectorlinks[sector])
-		sectorsoup = BeautifulSoup(sectorpage.read(), 'lxml')
+		sectorpage = getPageData(yahoolink+sectorlinks[sector])
+		sectorsoup = BeautifulSoup(sectorpage, 'lxml')
 		industryresults = sectorsoup.findAll('td', attrs={'bgcolor': 'ffffee'})
 		for result in industryresults:
 			#First row of table is part of results, but we don't want it
@@ -47,9 +61,11 @@ def getCompanies(indlink, industry, sectorname):
 	companylist = []
 	print yahoolink+indlink
 	time.sleep(5)
-	industrypage = urlopen(yahoolink+indlink)
-	industrysoup = BeautifulSoup(industrypage.read(), 'lxml')
+	industrypage = getPageData(yahoolink+indlink)
+	print 'got page, now souping'
+	industrysoup = BeautifulSoup(industrypage, 'lxml')
 	industryresults = industrysoup.findAll('td', attrs={'bgcolor': 'ffffee'})
+	print 'getting companies'
 	for result in industryresults:
 		#First two rows are not wanted, so filter out using <b> tag
 		resultb = result.b
