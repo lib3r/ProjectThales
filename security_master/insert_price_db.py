@@ -13,7 +13,7 @@ db_pass = ''
 db_name = 'security_master'
 con = mdb.connect(host=db_host, port=db_port, user=db_user, passwd=db_pass, db=db_name)
 failed_tickers = []
-
+warnings.filterwarnings('ignore', category = mdb.Warning)
 
 def obtain_list_of_db_tickers():
 	"""Obtains a list of the ticker symbols in the database."""
@@ -101,7 +101,7 @@ if __name__ == "__main__":
 	# Loop over the tickers and insert the daily historical
 	# data into the database
 	tickers = obtain_list_of_db_tickers()
-	warnings.filterwarnings('error', category=mdb.Warning)
+	# warnings.filterwarnings('error', category=mdb.Warning)
 	print "%d to insert" % len(tickers)
 	i = 0
 	for t in tickers:
