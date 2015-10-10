@@ -20,6 +20,7 @@ CREATE TABLE `exchange` (
   `city` varchar(255) NULL,
   `country` varchar(255) NULL,
   `currency` varchar(64) NULL,
+  `suffix` varchar(64) NULL,
   `timezone_offset` time NULL,
   `created_date` datetime NOT NULL,
   `last_updated_date` datetime NOT NULL,
