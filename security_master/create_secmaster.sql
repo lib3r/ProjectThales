@@ -13,7 +13,7 @@ USE `security_master` ;
 -- -----------------------------------------------------
 -- Table `security_master`.`exchange`
 -- -----------------------------------------------------
-CREATE TABLE `exchange` (
+CREATE TABLE `exchanges` (
   `id` int NOT NULL AUTO_INCREMENT,
   `abbrev` varchar(32) NOT NULL,
   `name` varchar(255) NOT NULL,

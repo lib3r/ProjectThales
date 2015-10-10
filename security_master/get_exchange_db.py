@@ -2,7 +2,7 @@ import requests
 import pandas as pd
 from bs4 import BeautifulSoup
 import MySQLdb as mdb
-import time
+import datetime
 
 def getPageData(url):
 	success = False
@@ -50,7 +50,6 @@ def getExchangeInfo():
 	exchangesymbol = info['Abbreviation'].tolist()
 	exchangeinfo = zip(exchangecountry, exchangesuffix, exchangesymbol)
 	exchangedict = dict(zip(exchanges, exchangeinfo))
-	print exchangedict
 	return exchangedict
 
 def insertExchanges(countrycodes, exchangedict):
@@ -64,17 +63,46 @@ def insertExchanges(countrycodes, exchangedict):
 
 	column_str = "abbrev, name, country, currency, suffix, created_date, last_updated_date"
 	for exchange in exchangedict:
+		column_str = "abbrev, name, country, currency, suffix, created_date, last_updated_date"
+		flag = 0
 		now = datetime.datetime.utcnow()
-		insert_str = exchangedict[exchange][2]+', '+exchange+', '+exchangedict[exchange][0]+', '+countrycodes[exchangedict[exchange][0]]+', '+exchangedict[exchange][1]+', '+now+', '+now
+		# Handle NaN values
+		abbrev = exchangedict[exchange][2]
+		if str(abbrev) != abbrev:
+			flag += 1
+		suffix = exchangedict[exchange][1]
+		if str(suffix) != suffix:
+			flag += 2
+		print exchangedict[exchange][2], exchange, exchangedict[exchange][0], countrycodes[exchangedict[exchange][0]], exchangedict[exchange][1]
+		# Based on flag value, we know which fields to take out if empty
+		# No missing values, use everything
+		if flag == 0:
+			insert_str = '\''+exchangedict[exchange][2]+'\', \''+exchange+'\', \''+exchangedict[exchange][0]+'\', \''+countrycodes[exchangedict[exchange][0]]+'\', \''+exchangedict[exchange][1]+'\', \''+str(now)+'\', \''+str(now)+'\''
+		# Missing only abbreviation
+		elif flag == 1:
+			column_str = column_str[8:len(column_str)]
+			insert_str = '\''+exchange+'\', \''+exchangedict[exchange][0]+'\', \''+countrycodes[exchangedict[exchange][0]]+'\', \''+exchangedict[exchange][1]+'\', \''+str(now)+'\', \''+str(now)+'\''
+		# Missing only suffix
+		elif flag == 2:
+			column_str = column_str[0:32]+column_str[40:len(column_str)]
+			insert_str = '\''+exchangedict[exchange][2]+'\', \''+exchange+'\', \''+exchangedict[exchange][0]+'\', \''+countrycodes[exchangedict[exchange][0]]+'\', \''+str(now)+'\', \''+str(now)+'\''
+		#Missing both abbreviation and suffix
+		else:
+			column_str = column_str[8:32]+column_str[40:len(column_str)]
+			insert_str = '\''+exchange+'\', \''+exchangedict[exchange][0]+'\', \''+countrycodes[exchangedict[exchange][0]]+'\', \''+str(now)+'\', \''+str(now)+'\''
 		cursor = con.cursor()
-		final_str = "INSERT INTO symbol (%s) VALUES (%s)" % (column_str, insert_str)
+		final_str = "INSERT INTO exchanges (%s) VALUES (%s);" % (column_str, insert_str)
 		print final_str
-
-
+		try:
+			cursor.execute(final_str)
+			con.commit()
+			print 'finished ' + exchange
+		except mdb.Error, e:
+			print 'MySQL Error [%d]: %s' % (e.args[0], e.args[1])
+			con.rollback()
+	con.close()
 
 if __name__=='__main__':
 	countrycodes = getCountryCurrencies()
 	exchangedict = getExchangeInfo()
-	print countrycodes
-	print exchangedict
 	insertExchanges(countrycodes, exchangedict)
