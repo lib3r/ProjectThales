@@ -36,12 +36,12 @@ sql = """SELECT dp.price_date, dp.adj_close_price
    
 
 def importDF():
-	# # Create a pandas dataframe from the SQL query
-	# df = psql.read_sql(sql, con=con, index_col='price_date') 
+	# Create a pandas dataframe from the SQL query
+	df = psql.read_sql(sql, con=con, index_col='price_date') 
 	
-	df = pd.read_csv('~/Downloads/table.csv',parse_dates={'Date'},index_col='Date')
-	column_str = ['open_price', 'high_price', 'low_price', 'close_price', 'volume', 'adj_close_price']
-	df.columns = column_str
+	# df = pd.read_csv('~/Downloads/table.csv',parse_dates={'Date'},index_col='Date')
+	# column_str = ['open_price', 'high_price', 'low_price', 'close_price', 'volume', 'adj_close_price']
+	# df.columns = column_str
 
 	return df
 

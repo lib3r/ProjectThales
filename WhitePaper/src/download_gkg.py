@@ -24,5 +24,5 @@ while date <= end_date:
             dl.write(chunk)
     print("%s!"%filename)
     dl.close()
-    time.sleep(30) # Be nice and don't overload the server.
+    time.sleep(2) # Be nice and don't overload the server.
     date += dt.timedelta(days=1)
