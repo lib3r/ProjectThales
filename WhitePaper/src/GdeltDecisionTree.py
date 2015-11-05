@@ -1,7 +1,3 @@
-import numpy
-import os
-import sys
-
 from pyspark import SparkContext
 from pyspark.sql.types import *
 from pyspark.sql.functions import *
@@ -16,7 +12,7 @@ from pyspark.ml.evaluation import MulticlassClassificationEvaluator
 from pyspark.mllib.util import MLUtils
 from pyspark.mllib.linalg import Vectors
 from pyspark.mllib.regression import LabeledPoint
-from pyspark.mllib.evaluation import BinaryClassificationMetrics
+from pyspark.mllib.evaluation import MulticlassMetrics
 
 eventsSchema = StructType([
     StructField("GLOBALEVENTID",IntegerType(),False), 
@@ -100,13 +96,11 @@ def preprocess(df):
     """
 
     event_codes = udf(lambda x: "1"+x , StringType())
-    # test = df.select(event_codes(df.EventCode).alias('EventCode1'))
-    df = df.withColumn("EventCode1",event_codes(df.EventCode))
-    df = df.withColumn("EventBaseCode1",event_codes(df.EventBaseCode))
-    df = df.withColumn("EventRootCode1",event_codes(df.EventRootCode))
-
-    df = df.drop("EventCode").drop("EventBaseCode").drop("EventRootCode")
-    df = df.withColumnRenamed("EventCode1","EventCode").withColumnRenamed("EventBaseCode1","EventBaseCode").withColumnRenamed("EventRootCode1","EventRootCode")
+    df = df.withColumn("EventCode1",event_codes(df.EventCode)).cache()
+    df = df.withColumn("EventBaseCode1",event_codes(df.EventBaseCode)).cache()
+    df = df.withColumn("EventRootCode1",event_codes(df.EventRootCode)).cache()
+    df = df.drop("EventCode").drop("EventBaseCode").drop("EventRootCode").cache()
+    df = df.withColumnRenamed("EventCode1","EventCode").withColumnRenamed("EventBaseCode1","EventBaseCode").withColumnRenamed("EventRootCode1","EventRootCode").cache()
 
     # add label to df
     df = df.withColumn('Label',df.SQLDATE.isin(dates))
@@ -125,13 +119,10 @@ def preprocess(df):
 
 if __name__ == "__main__":
 
+    sc = SparkContext(appName = "GdeltDecisionTree")
 
-    conf = (SparkConf()
-         .setAppName("GdeltDecisionTree"))
-    sc = SparkContext(conf = conf)
-
-    dataPath = "s3n://gdelt-em/data/*"
-    df = sqlContext.read.format("com.databricks.spark.csv").options(header = "true", delimiter="\t").load(dataPath, schema = eventsSchema)
+    dataPath = "s3n://gdelt-em/data_test/*"
+    df = sqlContext.read.format("com.databricks.spark.csv").options(header = "true", delimiter="\t").load(dataPath, schema = eventsSchema).cache()
 
     data = preprocess(df)
 
@@ -162,42 +153,28 @@ if __name__ == "__main__":
     # Select example rows to display.
     predictions.select("prediction", "indexedLabel", "features").show(5)
 
-    # Select (prediction, true label) and compute test error
-    evaluator = MulticlassClassificationEvaluator(labelCol="indexedLabel", predictionCol="prediction", metricName="f1")
-    accuracy = evaluator.evaluate(predictions)
-    print "Test Error = %g" % (1.0 - accuracy)
+
+    # Select (prediction, true label) and evaluate model
+    predictionAndLabels = predictions.select("prediction", "indexedLabel").rdd
+    metrics = MulticlassMetrics(predictionAndLabels)
+    metrics.confusionMatrix().toArray()
+    metrics.falsePositiveRate(0.0)
+    metrics.precision(1.0)
+    metrics.recall(2.0)
+    metrics.fMeasure(0.0, 2.0)
+    metrics.precision()
+    metrics.weightedFalsePositiveRate
+    metrics.weightedPrecision
+    metrics.weightedRecall
+    metrics.weightedFMeasure()
+
+    
+    # evaluator = MulticlassClassificationEvaluator(labelCol="indexedLabel", predictionCol="prediction", metricName="weightedRecall")
+    # accuracy = evaluator.evaluate(predictions)
+    # print "Test Error = %g" % (1.0 - accuracy)
+
 
     treeModel = model.stages[2]
     print treeModel # summary only
 
-
-
-
-    # (trainingData, testData) = data.randomSplit([0.7, 0.3])
-    # print "train\t%s" % str(trainingData.take(1))
-    # # Train a DecisionTree model.
-    # #  Empty categoricalFeaturesInfo indicates all features are continuous.
-    # categoricalFeaturesInfo = {1: df.select("IsRootEvent").distinct().count(), 
-    # 2: df.select("EventCode").distinct().count(),
-    # 3: df.select("EventBaseCode").distinct().count(),
-    # 4: df.select("EventRootCode").distinct().count(),
-    # 5: df.select("QuadClass").distinct().count()}
-    # model = DecisionTree.trainClassifier(trainingData, numClasses=2, categoricalFeaturesInfo=categoricalFeaturesInfo,maxBins=300)
-
-    # # Evaluate model on test instances and compute test error
-    # predictions = model.predict(testData.map(lambda x: x.features))
-    # labelsAndPredictions = testData.map(lambda lp: lp.label).zip(predictions)
-
-    # metrics = MulticlassMetrics(predictionAndLabels)
-    # testErr = labelsAndPredictions.filter(lambda (v, p): v != p).count() / float(testData.count())
-    # print('Test Error = ' + str(testErr))
-    # print('FScore = ' + metrics.fMeasure()
-    # print('Learned classification tree model:')
-    # print(model.toDebugString())
-
-    # # Save and load model
-    # model.save(sc, "myModelPath")
-    # sameModel = DecisionTreeModel.load(sc, "myModelPath")
-
-    # sc.stop()
 
