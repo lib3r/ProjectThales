@@ -1,4 +1,5 @@
 from pyspark import SparkContext
+from pyspark.sql import SQLContext
 from pyspark.sql.types import *
 from pyspark.sql.functions import *
 from pyspark.sql.functions import udf
@@ -158,16 +159,16 @@ if __name__ == "__main__":
     # Select (prediction, true label) and evaluate model
     predictionAndLabels = predictions.select("prediction", "indexedLabel").rdd
     metrics = MulticlassMetrics(predictionAndLabels)
-    metrics.confusionMatrix().toArray()
-    metrics.falsePositiveRate(0.0)
-    metrics.precision(1.0)
-    metrics.recall(2.0)
-    metrics.fMeasure(0.0, 2.0)
-    metrics.precision()
-    metrics.weightedFalsePositiveRate
-    metrics.weightedPrecision
-    metrics.weightedRecall
-    metrics.weightedFMeasure()
+    print metrics.confusionMatrix().toArray()
+    print metrics.falsePositiveRate(0.0)
+    print metrics.precision(1.0)
+    print metrics.recall(2.0)
+    print metrics.fMeasure(0.0, 2.0)
+    print metrics.precision()
+    print metrics.weightedFalsePositiveRate
+    print metrics.weightedPrecision
+    print metrics.weightedRecall
+    print metrics.weightedFMeasure()
 
     
     # evaluator = MulticlassClassificationEvaluator(labelCol="indexedLabel", predictionCol="prediction", metricName="weightedRecall")
