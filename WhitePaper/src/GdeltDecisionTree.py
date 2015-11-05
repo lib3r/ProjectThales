@@ -120,6 +120,7 @@ def preprocess(df):
 if __name__ == "__main__":
 
     sc = SparkContext(appName = "GdeltDecisionTree")
+    sqlContext = SQLContext(sc)
 
     dataPath = "s3n://gdelt-em/data_test/*"
     df = sqlContext.read.format("com.databricks.spark.csv").options(header = "true", delimiter="\t").load(dataPath, schema = eventsSchema).cache()
