@@ -7,7 +7,6 @@ from pyspark.sql import Row
 
 from pyspark.ml import Pipeline
 from pyspark.ml.classification import DecisionTreeClassifier
-from pyspark.mllib.tree import DecisionTree, DecisionTreeModel
 from pyspark.ml.feature import StringIndexer, VectorIndexer
 from pyspark.ml.evaluation import MulticlassClassificationEvaluator
 from pyspark.mllib.util import MLUtils
@@ -128,6 +127,7 @@ if __name__ == "__main__":
 
     data = preprocess(df)
 
+    print "First row of Data: "+ data.take(1)
 
     # Index labels, adding metadata to the label column.
     # Fit on whole dataset to include all labels in index.
@@ -159,16 +159,16 @@ if __name__ == "__main__":
     # Select (prediction, true label) and evaluate model
     predictionAndLabels = predictions.select("prediction", "indexedLabel").rdd
     metrics = MulticlassMetrics(predictionAndLabels)
-    print metrics.confusionMatrix().toArray()
-    print metrics.falsePositiveRate(0.0)
-    print metrics.precision(1.0)
-    print metrics.recall(2.0)
-    print metrics.fMeasure(0.0, 2.0)
-    print metrics.precision()
-    print metrics.weightedFalsePositiveRate
-    print metrics.weightedPrecision
-    print metrics.weightedRecall
-    print metrics.weightedFMeasure()
+    print "confusionMatrix " + metrics.confusionMatrix().toArray()
+    print "False Positive of Lable 0 " + metrics.falsePositiveRate(0.0)
+    print "Precision of 1 " + metrics.precision(1.0)
+    print "Recall of 1 " + metrics.recall(2.0)
+    print "fMeasure of both " + metrics.fMeasure(0.0, 1.0)
+    print "Precision" + metrics.precision()
+    print "Weighted False Positive " + metrics.weightedFalsePositiveRate
+    print "Weighted Precision " + metrics.weightedPrecision
+    print "Weighted Recall " + metrics.weightedRecall
+    print "Weighted FScore " + metrics.weightedFMeasure()
 
     
     # evaluator = MulticlassClassificationEvaluator(labelCol="indexedLabel", predictionCol="prediction", metricName="weightedRecall")
