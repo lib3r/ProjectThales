@@ -89,11 +89,11 @@ def summarize(dataset):
     summary = Statistics.colStats(features)
     print("features average: %r" % summary.mean())
 
-def fix_events(df, column_name):
+def fix_events(df, column_name, column):
     event_codes = udf(lambda x: "1"+x , StringType())
-    df = df.withColumn("Temp",event_codes(df(column_name))).cache()
+    df = df.withColumn("Temp",event_codes(df.column))
     df = df.drop(column_name)
-    df = df.withColumnRenamed("Temp",column_name)
+    df = df.withColumnRenamed("Temp",column_name).cache()
     return df
 
 
@@ -104,9 +104,9 @@ def preprocess(df):
 
     
 
-    df = fix_events(df,"EventCode")
-    df = fix_events(df,"EventBaseCode")
-    df = fix_events(df,"EventRootCode")
+    df = fix_events(df,"EventCode",df.EventCode)
+    df = fix_events(df,"EventBaseCode",df.EventBaseCode)
+    df = fix_events(df,"EventRootCode",df.EventRootCode)
     # df = df.withColumn("EventCode1",event_codes(df.EventCode)).cache()
     # df = df.withColumn("EventBaseCode1",event_codes(df.EventBaseCode)).cache()
     # df = df.withColumn("EventRootCode1",event_codes(df.EventRootCode)).cache()
