@@ -9,7 +9,6 @@ from pyspark.ml import Pipeline
 from pyspark.ml.classification import DecisionTreeClassifier
 from pyspark.ml.feature import StringIndexer, VectorIndexer
 from pyspark.ml.evaluation import MulticlassClassificationEvaluator
-from pyspark.mllib.util import MLUtils
 from pyspark.mllib.linalg import Vectors
 from pyspark.mllib.regression import LabeledPoint
 from pyspark.mllib.evaluation import MulticlassMetrics
@@ -90,17 +89,29 @@ def summarize(dataset):
     summary = Statistics.colStats(features)
     print("features average: %r" % summary.mean())
 
+def fix_events(df, column_name):
+    event_codes = udf(lambda x: "1"+x , StringType())
+    df = df.withColumn("Temp",event_codes(df(column_name))).cache()
+    df = df.drop(column_name)
+    df = df.withColumnRenamed("Temp",column_name)
+    return df
+
+
 def preprocess(df):
     """ 
     Convert GDELT files into a format for DecisionTree
     """
 
-    event_codes = udf(lambda x: "1"+x , StringType())
-    df = df.withColumn("EventCode1",event_codes(df.EventCode)).cache()
-    df = df.withColumn("EventBaseCode1",event_codes(df.EventBaseCode)).cache()
-    df = df.withColumn("EventRootCode1",event_codes(df.EventRootCode)).cache()
-    df = df.drop("EventCode").drop("EventBaseCode").drop("EventRootCode").cache()
-    df = df.withColumnRenamed("EventCode1","EventCode").withColumnRenamed("EventBaseCode1","EventBaseCode").withColumnRenamed("EventRootCode1","EventRootCode").cache()
+    
+
+    df = fix_events(df,"EventCode")
+    df = fix_events(df,"EventBaseCode")
+    df = fix_events(df,"EventRootCode")
+    # df = df.withColumn("EventCode1",event_codes(df.EventCode)).cache()
+    # df = df.withColumn("EventBaseCode1",event_codes(df.EventBaseCode)).cache()
+    # df = df.withColumn("EventRootCode1",event_codes(df.EventRootCode)).cache()
+    # df = df.drop("EventCode").drop("EventBaseCode").drop("EventRootCode").cache()
+    # df = df.withColumnRenamed("EventCode1","EventCode").withColumnRenamed("EventBaseCode1","EventBaseCode").withColumnRenamed("EventRootCode1","EventRootCode").cache()
 
     # add label to df
     df = df.withColumn('Label',df.SQLDATE.isin(dates))
@@ -123,7 +134,7 @@ if __name__ == "__main__":
     sqlContext = SQLContext(sc)
 
     dataPath = "s3n://gdelt-em/data_test/*"
-    df = sqlContext.read.format("com.databricks.spark.csv").options(header = "true", delimiter="\t").load(dataPath, schema = eventsSchema).repartition(100).cache()
+    df = sqlContext.read.format("com.databricks.spark.csv").options(header = "true", delimiter="\t").load(dataPath, schema = eventsSchema).repartition(200).cache()
 
     data = preprocess(df)
 
@@ -161,13 +172,9 @@ if __name__ == "__main__":
     metrics = MulticlassMetrics(predictionAndLabels)
     print metrics.confusionMatrix().toArray()
     print "False Positive of Lable 0 %f " % metrics.falsePositiveRate(0.0)
-    print "Precision of 1 %f " % metrics.precision(1.0)
-    print "Recall of 1 % f" %metrics.recall(2.0)
-    print "fMeasure of both %f " % metrics.fMeasure(0.0, 1.0)
     print "Precision %f " % metrics.precision()
     print "Weighted False Positive %f" % metrics.weightedFalsePositiveRate
     print "Weighted Precision %f" % metrics.weightedPrecision
-    print "Weighted Recall %f" % metrics.weightedRecall
     print "Weighted FScore %f" % metrics.weightedFMeasure()
 
     
