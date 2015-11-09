@@ -8,6 +8,7 @@ from pyspark.ml import Pipeline
 from pyspark.ml.classification import RandomForestClassifier
 from pyspark.ml.feature import StringIndexer, VectorIndexer
 from pyspark.ml.evaluation import MulticlassClassificationEvaluator
+from pyspark.mllib.evaluation import MulticlassMetrics
 from pyspark.mllib.linalg import Vectors
 from pyspark.mllib.regression import LabeledPoint
 
@@ -103,8 +104,11 @@ def preprocess(df):
     df = df.withColumn('Label', df.SQLDATE.isin(dates))
     # remove troublesome column
     df = df.filter("EventRootCode != '1--'").cache()
+    df = df.filter(((df.Actor1CountryCode == 'CHN') | (df.Actor2CountryCode == 'CHN')) & ((df.Actor1Type1Code == 'BUS') | (df.Actor2Type1Code == 'BUS'))).cache()
     #only use these columns for features
-    dataset = df.select("Label", "IsRootEvent", "EventCode", "EventBaseCode", "EventRootCode", "QuadClass", "GoldsteinScale", "NumMentions", "NumSources", "NumArticles", "AvgTone").cache()
+    #dataset = df.select("Label", "IsRootEvent", "EventCode", "EventBaseCode", "EventRootCode", "QuadClass", "GoldsteinScale", "NumMentions", "NumSources", "NumArticles", "AvgTone").cache()
+    # NumArticles was actually hurting accuracy
+    dataset = df.select("Label", "IsRootEvent", "EventCode",  "AvgTone").cache()
     # create features in format
     data = dataset.map(lambda row: LabeledPoint(float(row[0] is True), Vectors.dense(row[1:]))).toDF()
     data.cache()
@@ -145,10 +149,21 @@ if __name__ == "__main__":
     # Select example rows to display.
     predictions.select("prediction", "indexedLabel", "features").show(5)
 
+    predictionAndLabels = predictions.select("prediction", "indexedLabel").rdd
+    metrics = MulticlassMetrics(predictionAndLabels)
+    print metrics.confusionMatrix().toArray()
+    print "False Positive of Label 0 %f " % metrics.falsePositiveRate(0.0)
+    print "Precision %f " % metrics.precision()
+    print "Weighted False Positive %f" % metrics.weightedFalsePositiveRate
+    print "Weighted Precision %f" % metrics.weightedPrecision
+    print "Weighted FScore %f" % metrics.weightedFMeasure()
+
     # Select (prediction, true label) and compute test error
-    evaluator = MulticlassClassificationEvaluator(labelCol="indexedLabel", predictionCol="prediction", metricName="f1")
-    accuracy = evaluator.evaluate(predictions)
-    print "Test Error = %g" % (1.0 - accuracy)
+    #evaluator = MulticlassClassificationEvaluator(labelCol="indexedLabel", predictionCol="prediction", metricName="f1")
+    
+    #accuracy = evaluator.evaluate(predictions)
+
+    #print "Test Error = %g" % (1.0 - accuracy)
 
     treeModel = model.stages[2]
     print treeModel  # summary only
