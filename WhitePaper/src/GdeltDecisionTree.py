@@ -74,14 +74,33 @@ eventsSchema = StructType([
     StructField("ActionGeo_FeatureID",StringType(),True), 
     StructField("DATEADDED",StringType(),True), 
     StructField("SOURCEURL",StringType(),True)])
-dates = [
+
+dates1 = [
     20150612, 20150826, 20150126, 20150206, 20141009, 20141027, 20140616, 
     20140619, 20140410, 20140428, 20140219, 20140320, 20131204, 20140120, 
     20130912, 20131113, 20130529, 20130627, 20130206, 20130502, 20121022, 
-    20121203, 20120910, 20120926, 20120504, 20120905, 20120302, 20120329]
+    20121203, 20120910, 20120926, 20120504, 20120905, 20120302, 20120329] 
 
-maxima = []
-minima = []
+maxima = [
+    20150817, 20150723, 20150612, 20150427, 20150126, 20150107, 20141009,
+    20140819, 20140616, 20140410, 20140219, 20131204, 20131014, 20130711, 
+    20130529, 20130419, 20130206, 20121022, 20120910, 20120809, 20120504, 
+    20120302]
+
+minima = [
+    20150826, 20150803, 20150708, 20150507, 20150206, 20150119, 20141027, 
+    20140828, 20140619, 20140519, 20140320, 20140120, 20131113, 20130729, 
+    20130627, 20130502, 20130415, 20121203, 20120926, 20120905, 20120731, 
+    20120329]
+
+dates = [
+    20150817, 20150723, 20150612, 20150427, 20150126, 20150107, 20141009, 
+    20140819, 20140616, 20140410, 20140219, 20131204, 20131014, 20130711, 
+    20130529, 20130419, 20130206, 20121022, 20120910, 20120809, 20120504, 
+    20120302, 20150826, 20150803, 20150708, 20150507, 20150206, 20150119, 
+    20141027, 20140828, 20140619, 20140519, 20140320, 20140120, 20131113, 
+    20130729, 20130627, 20130502, 20130415, 20121203, 20120926, 20120905, 
+    20120731, 20120329]
 
 def summarize(dataset):
     """
@@ -94,13 +113,6 @@ def summarize(dataset):
     summary = Statistics.colStats(features)
     print("features average: %r" % summary.mean())
 
-def remove_garbage(elem):
-
-    mat = re.match("[^\\d.]",elem)
-    if (elem) and (mat is not None):
-        return 
-
-
 def fix_events(df, column_name, column):
     """ 
     Appends "1" in front of event columns
@@ -112,9 +124,18 @@ def fix_events(df, column_name, column):
 
     df = df.withColumn("temp", regexp_replace(column_name,"^0","3"))
     df = df.drop(column_name)
-    df = df.withColumnRenamed("temp",column_name).cache()
+    df = df.withColumnRenamed("temp",column_name)
 
     return df
+
+def label(sqldate):
+    if sqldate in maxima:
+        return 1.0
+    elif sqldate in minima:
+        return -1.0
+    else:
+        return 0
+
 
 
 def preprocess(df):
@@ -123,27 +144,25 @@ def preprocess(df):
     """
 
     # remove troublesome rows
-    df = df.filter("EventRootCode != '--'").cache()
-    df = df.filter("EventRootCode != 'X'").cache()
+    df = df.filter("EventRootCode != '--'")
+    df = df.filter("EventRootCode != 'X'")
 
 
     # fix event columns
     df = fix_events(df,"EventCode",df.EventCode)
     df = fix_events(df,"EventBaseCode",df.EventBaseCode)
-    df = fix_events(df,"EventRootCode",df.EventRootCode)
+    df = fix_events(df,"EventRootCode",df.EventRootCode).cache()
     # df = df = df.withColumn("EventCode1", regexp_replace("EventCode","^0","3")).cache()
     # df = df = df.withColumn("EventBaseCode1", regexp_replace("EventCode","^0","3")).cache()
     # df = df = df.withColumn("EventRootCode1", regexp_replace("EventCode","^0","3")).cache()
     # df = df.drop("EventCode").drop("EventBaseCode").drop("EventRootCode").cache()
     # df = df.withColumnRenamed("EventCode1","EventCode").withColumnRenamed("EventBaseCode1","EventBaseCode").withColumnRenamed("EventRootCode1","EventRootCode").cache()
-    
+
 
     # add label to df
-    # label = udf(lambda x: 1 if x in maxima else -1)
-    
-    df = df.withColumn('Label',df.SQLDATE.isin(dates))
-
-
+    labeler = udf(label, FloatType())
+    df = df.withColumn('Label',labeler(df.SQLDATE))
+    # df = df.withColumn('Label',df.SQLDATE.isin(dates))
 
     #only use these columns for features
     dataset = df.select("Label","IsRootEvent", "EventCode", "EventBaseCode","EventRootCode", "QuadClass","GoldsteinScale","NumMentions","NumSources","NumArticles","AvgTone").cache()
@@ -160,7 +179,7 @@ if __name__ == "__main__":
     sqlContext = SQLContext(sc)
         
     dataPath = "s3n://gdelt-em/data/*"
-    df = sqlContext.read.format("com.databricks.spark.csv").options(header = "true", delimiter="\t").load(dataPath, schema = eventsSchema).cache()
+    df = sqlContext.read.format("com.databricks.spark.csv").options(header = "true", delimiter="\t").load(dataPath, schema = eventsSchema)
 
     data = preprocess(df)
 
