@@ -1,3 +1,5 @@
+import re
+
 from pyspark import SparkContext
 from pyspark.sql import SQLContext
 from pyspark.sql.types import *
@@ -78,6 +80,9 @@ dates = [
     20130912, 20131113, 20130529, 20130627, 20130206, 20130502, 20121022, 
     20121203, 20120910, 20120926, 20120504, 20120905, 20120302, 20120329]
 
+maxima = []
+minima = []
+
 def summarize(dataset):
     """
     Stats about the dataset
@@ -89,11 +94,26 @@ def summarize(dataset):
     summary = Statistics.colStats(features)
     print("features average: %r" % summary.mean())
 
+def remove_garbage(elem):
+
+    mat = re.match("[^\\d.]",elem)
+    if (elem) and (mat is not None):
+        return 
+
+
 def fix_events(df, column_name, column):
-    event_codes = udf(lambda x: "1"+x , StringType())
-    df = df.withColumn("Temp",event_codes(df.column))
+    """ 
+    Appends "1" in front of event columns
+    """
+    # event_codes = udf(lambda x: "1"+x , StringType())
+    # df = df.withColumn("Temp",event_codes(column))
+    # df = df.drop(column_name)
+    # df = df.withColumnRenamed("Temp",column_name).cache()    
+
+    df = df.withColumn("temp", regexp_replace(column_name,"^0","3"))
     df = df.drop(column_name)
-    df = df.withColumnRenamed("Temp",column_name).cache()
+    df = df.withColumnRenamed("temp",column_name).cache()
+
     return df
 
 
@@ -102,22 +122,28 @@ def preprocess(df):
     Convert GDELT files into a format for DecisionTree
     """
 
-    
+    # remove troublesome rows
+    df = df.filter("EventRootCode != '--'").cache()
+    df = df.filter("EventRootCode != 'X'").cache()
 
+
+    # fix event columns
     df = fix_events(df,"EventCode",df.EventCode)
     df = fix_events(df,"EventBaseCode",df.EventBaseCode)
     df = fix_events(df,"EventRootCode",df.EventRootCode)
-    # df = df.withColumn("EventCode1",event_codes(df.EventCode)).cache()
-    # df = df.withColumn("EventBaseCode1",event_codes(df.EventBaseCode)).cache()
-    # df = df.withColumn("EventRootCode1",event_codes(df.EventRootCode)).cache()
+    # df = df = df.withColumn("EventCode1", regexp_replace("EventCode","^0","3")).cache()
+    # df = df = df.withColumn("EventBaseCode1", regexp_replace("EventCode","^0","3")).cache()
+    # df = df = df.withColumn("EventRootCode1", regexp_replace("EventCode","^0","3")).cache()
     # df = df.drop("EventCode").drop("EventBaseCode").drop("EventRootCode").cache()
     # df = df.withColumnRenamed("EventCode1","EventCode").withColumnRenamed("EventBaseCode1","EventBaseCode").withColumnRenamed("EventRootCode1","EventRootCode").cache()
+    
 
     # add label to df
+    # label = udf(lambda x: 1 if x in maxima else -1)
+    
     df = df.withColumn('Label',df.SQLDATE.isin(dates))
 
-    # remove troublesome column
-    df = df.filter("EventRootCode != '1--'").cache()
+
 
     #only use these columns for features
     dataset = df.select("Label","IsRootEvent", "EventCode", "EventBaseCode","EventRootCode", "QuadClass","GoldsteinScale","NumMentions","NumSources","NumArticles","AvgTone").cache()
@@ -132,9 +158,9 @@ if __name__ == "__main__":
 
     sc = SparkContext(appName = "GdeltDecisionTree")
     sqlContext = SQLContext(sc)
-
-    dataPath = "s3n://gdelt-em/data_test/*"
-    df = sqlContext.read.format("com.databricks.spark.csv").options(header = "true", delimiter="\t").load(dataPath, schema = eventsSchema).repartition(200).cache()
+        
+    dataPath = "s3n://gdelt-em/data/*"
+    df = sqlContext.read.format("com.databricks.spark.csv").options(header = "true", delimiter="\t").load(dataPath, schema = eventsSchema).cache()
 
     data = preprocess(df)
 
