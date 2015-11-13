@@ -125,16 +125,12 @@ def fix_events(df, column_name, column):
     df = df.withColumn("temp", regexp_replace(column_name,"^0","3"))
     df = df.drop(column_name)
     df = df.withColumnRenamed("temp",column_name)
-
     return df
 
 def label(sqldate):
-    if sqldate in maxima:
-        return 1.0
-    elif sqldate in minima:
-        return -1.0
-    else:
-        return 0
+    if sqldate in maxima: return 1.0
+    elif sqldate in minima: return 2.0
+    else: return 0.0
 
 
 
@@ -151,7 +147,7 @@ def preprocess(df):
     # fix event columns
     df = fix_events(df,"EventCode",df.EventCode)
     df = fix_events(df,"EventBaseCode",df.EventBaseCode)
-    df = fix_events(df,"EventRootCode",df.EventRootCode).cache()
+    df = fix_events(df,"EventRootCode",df.EventRootCode)
     # df = df = df.withColumn("EventCode1", regexp_replace("EventCode","^0","3")).cache()
     # df = df = df.withColumn("EventBaseCode1", regexp_replace("EventCode","^0","3")).cache()
     # df = df = df.withColumn("EventRootCode1", regexp_replace("EventCode","^0","3")).cache()
@@ -161,25 +157,28 @@ def preprocess(df):
 
     # add label to df
     labeler = udf(label, FloatType())
-    df = df.withColumn('Label',labeler(df.SQLDATE))
+    df = df.withColumn('Label',labeler(df.SQLDATE)).cache()
     # df = df.withColumn('Label',df.SQLDATE.isin(dates))
+
+    print "Label Counts:"
+    df.select("Label").groupby("Label").count().show()
 
     #only use these columns for features
     dataset = df.select("Label","IsRootEvent", "EventCode", "EventBaseCode","EventRootCode", "QuadClass","GoldsteinScale","NumMentions","NumSources","NumArticles","AvgTone").cache()
 
     # create features in format
-    data = dataset.map(lambda row: LabeledPoint(float(row[0] == True), Vectors.dense(row[1:]))).toDF()
+    data = dataset.map(lambda row: LabeledPoint(row[0], Vectors.dense(row[1:]))).toDF()
     data.cache()
 
     return data
 
 if __name__ == "__main__":
 
-    sc = SparkContext(appName = "GdeltDecisionTree")
+    sc = SparkContext(appName = "GdeltDT")
     sqlContext = SQLContext(sc)
         
-    dataPath = "s3n://gdelt-em/data/*"
-    df = sqlContext.read.format("com.databricks.spark.csv").options(header = "true", delimiter="\t").load(dataPath, schema = eventsSchema)
+    dataPath = "s3n://gdelt-em/data_test/*"
+    df = sqlContext.read.format("com.databricks.spark.csv").options(header = "true", delimiter="\t").load(dataPath, schema = eventsSchema).repartition(200)
 
     data = preprocess(df)
 
@@ -209,6 +208,7 @@ if __name__ == "__main__":
     predictions = model.transform(testData)
 
     # Select example rows to display.
+    print "Predictions"
     predictions.select("prediction", "indexedLabel", "features").show(5)
 
 
@@ -222,13 +222,10 @@ if __name__ == "__main__":
     print "Weighted Precision %f" % metrics.weightedPrecision
     print "Weighted FScore %f" % metrics.weightedFMeasure()
 
-    
-    # evaluator = MulticlassClassificationEvaluator(labelCol="indexedLabel", predictionCol="prediction", metricName="weightedRecall")
-    # accuracy = evaluator.evaluate(predictions)
-    # print "Test Error = %g" % (1.0 - accuracy)
-
-
     treeModel = model.stages[2]
     print treeModel # summary only
+
+
+    sc.stop()
 
 
