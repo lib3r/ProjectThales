@@ -199,8 +199,6 @@ if __name__ == "__main__":
 
     data = preprocess(df)
 
-    print data.take(1)
-
     # Index labels, adding metadata to the label column.
     # Fit on whole dataset to include all labels in index.
     labelIndexer = StringIndexer(inputCol="label", outputCol="indexedLabel").fit(data)
