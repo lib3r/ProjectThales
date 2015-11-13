@@ -7,10 +7,7 @@ from pyspark.sql.functions import *
 from pyspark.sql.functions import udf
 from pyspark.sql import Row
 
-from pyspark.ml import Pipeline
-from pyspark.ml.classification import DecisionTreeClassifier
-from pyspark.ml.feature import StringIndexer, VectorIndexer
-from pyspark.ml.evaluation import MulticlassClassificationEvaluator
+from pyspark.mllib.tree import DecisionTree, DecisionTreeModel
 from pyspark.mllib.linalg import Vectors
 from pyspark.mllib.regression import LabeledPoint
 from pyspark.mllib.evaluation import MulticlassMetrics
@@ -157,6 +154,38 @@ def preprocess(df):
 
     return data
 
+def evaluate(labelsAndPredictions, data):
+
+    testErr = labelsAndPredictions.filter(lambda (v, p): v != p).count() / float(testData.count())
+    print('Accuracy = ' + str(1 - testErr))
+
+    # Instantiate metrics object
+    metrics = MulticlassMetrics(labelsAndPredictions)
+
+    # Overall statistics
+    precision = metrics.precision()
+    recall = metrics.recall()
+    f1Score = metrics.fMeasure()
+    print("Summary Stats")
+    print("Precision = %s" % precision)
+    print("Recall = %s" % recall)
+    print("F1 Score = %s" % f1Score)
+
+    # Statistics by class
+    labels = data.map(lambda lp: lp.label).distinct().collect()
+    for label in sorted(labels):
+        print("Class %s precision = %s" % (label, metrics.precision(label)))
+        print("Class %s recall = %s" % (label, metrics.recall(label)))
+        print("Class %s F1 Measure = %s" % (label, metrics.fMeasure(label, beta=1.0)))
+
+    # Weighted stats
+    print("Weighted recall = %s" % metrics.weightedRecall)
+    print("Weighted precision = %s" % metrics.weightedPrecision)
+    print("Weighted F(1) Score = %s" % metrics.weightedFMeasure())
+    print("Weighted F(0.5) Score = %s" % metrics.weightedFMeasure(beta=0.5))
+    print("Weighted false positive rate = %s" % metrics.weightedFalsePositiveRate)
+
+
 if __name__ == "__main__":
 
     sc = SparkContext(appName = "GdeltDecisionTree")
@@ -184,11 +213,12 @@ if __name__ == "__main__":
     # Evaluate model on test instances and compute test error
     predictions = model.predict(testData.map(lambda x: x.features))
     labelsAndPredictions = testData.map(lambda lp: lp.label).zip(predictions)
-    testErr = labelsAndPredictions.filter(lambda (v, p): v != p).count() / float(testData.count())
-    print('Accuracy = ' + str(1 - testErr))
+
     print('Learned classification tree model:')
     print(model.toDebugString())
 
+    evaluate(labelsAndPredictions, data)
+    
     # Save and load model
     model.save(sc, "myModelPath")
     sameModel = DecisionTreeModel.load(sc, "myModelPath")
