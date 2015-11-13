@@ -207,7 +207,7 @@ if __name__ == "__main__":
     (trainingData, testData) = data.randomSplit([0.7, 0.3])
     # Train a DecisionTree model.
     #  Empty categoricalFeaturesInfo indicates all features are continuous.
-    model = DecisionTree.trainClassifier(trainingData, numClasses=3, categoricalFeaturesInfo={}},
+    model = DecisionTree.trainClassifier(trainingData, numClasses=3, categoricalFeaturesInfo={},
                                          impurity='gini', maxDepth=5, maxBins=300)
 
     # Evaluate model on test instances and compute test error
