@@ -218,10 +218,6 @@ if __name__ == "__main__":
     print(model.toDebugString())
 
     evaluate(labelsAndPredictions, data)
-    
-    # Save and load model
-    model.save(sc, "myModelPath")
-    sameModel = DecisionTreeModel.load(sc, "myModelPath")
 
     sc.stop()
 
