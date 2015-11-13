@@ -14,34 +14,37 @@ from PIL import Image
 from matplotlib import rcParams
 rcParams.update({'figure.autolayout': True})
 
-# Connect to the MySQL instance
-db_host = '127.0.0.1'
-db_port = 3306
-db_user = 'root'
-db_pass = ''
-db_name = 'security_master'
-con = mdb.connect(host=db_host, port=db_port, user=db_user, passwd=db_pass, db=db_name)
+def mysql():
 
-# Select all of the historic Google adjusted close data
+	# Connect to the MySQL instance
+	db_host = '127.0.0.1'
+	db_port = 3306
+	db_user = 'root'
+	db_pass = ''
+	db_name = 'security_master'
+	con = mdb.connect(host=db_host, port=db_port, user=db_user, passwd=db_pass, db=db_name)
 
-symbol = "'0321.HK'"
+	# Select all of the historic Google adjusted close data
 
-sql = """SELECT dp.price_date, dp.adj_close_price
-         FROM symbol AS sym
-         INNER JOIN daily_price AS dp
-         ON dp.symbol_id = sym.id
-         WHERE sym.ticker = %s
-         ORDER BY dp.price_date ASC;""" % symbol
+	symbol = "'0321.HK'"
 
-   
+	sql = """SELECT dp.price_date, dp.adj_close_price
+	         FROM symbol AS sym
+	         INNER JOIN daily_price AS dp
+	         ON dp.symbol_id = sym.id
+	         WHERE sym.ticker = %s
+	         ORDER BY dp.price_date ASC;""" % symbol
+
+	# Create a pandas dataframe from the SQL query
+	df = psql.read_sql(sql, con=con, index_col='price_date')
+
+	return df 
 
 def importDF():
-	# Create a pandas dataframe from the SQL query
-	df = psql.read_sql(sql, con=con, index_col='price_date') 
 	
-	# df = pd.read_csv('~/Downloads/table.csv',parse_dates={'Date'},index_col='Date')
-	# column_str = ['open_price', 'high_price', 'low_price', 'close_price', 'volume', 'adj_close_price']
-	# df.columns = column_str
+	df = pd.read_csv('~/Downloads/table.csv',parse_dates={'Date'},index_col='Date')
+	column_str = ['open_price', 'high_price', 'low_price', 'close_price', 'volume', 'adj_close_price']
+	df.columns = column_str
 
 	return df
 
@@ -51,11 +54,9 @@ def calculateReturns(df):
 	df['pct_change'] = df.adj_close_price.pct_change()
 	df['log_ret'] = np.log(df.adj_close_price) - np.log(df.adj_close_price.shift(1))
 	df = df[np.isfinite(df['log_ret'])]
-	# print df
 
 	# create returns DF and only keep data from 2015
 	ret = df['log_ret']
-	ret = ret[ret.index > dateutil.parser.parse("2014-12-31")]
 	# print ret
 	return ret
 
@@ -79,10 +80,7 @@ def sigmas(ret, s):
 	dates = sigmas.index - pd.tseries.offsets.BDay(1)
 	return sigmas
 
-
 def plot(x,y,xm,ym,xn,yn):
-
-
 	# #plot
 	# fig = output.adj_close_price.plot()
 	# ymin, ymax = fig.get_ylim()
@@ -100,7 +98,7 @@ def plot(x,y,xm,ym,xn,yn):
 	# pylab.xlabel('2015', fontsize=24)
 	# pylab.ylabel('Price (in CNY)', fontsize=24)
 	# pylab.gca().tight_layout()
-	pylab.gca().xaxis.set_major_formatter(mdates.DateFormatter('%b'))
+	# pylab.gca().xaxis.set_major_formatter(mdates.DateFormatter('%b'))
 	# pylab.gca().xaxis.set_tick_params(labelsize=20)
 	# pylab.gca().yaxis.set_tick_params(labelsize=20)
 
@@ -123,16 +121,22 @@ if __name__ == "__main__":
 
 	df = importDF()
 	ret = calculateReturns(df)
+	print len(df)
+
+	date = "2011-12-31"
+	output = df[df.index > dateutil.parser.parse(date)]
+	ret = ret[ret.index > dateutil.parser.parse(date)]
 	
 	s = 2
-	sigmas = sigmas(ret,s)
-
-	output = df[df.index > dateutil.parser.parse("2014-12-31")]
+	sigmas(ret,s)
 	
 	y = output.adj_close_price
 	x = output.index
-	threshold = len(ret[np.abs(ret-ret.mean())>=(s*ret.std())])
+
+	# threshold = len(ret[np.abs(ret-ret.mean())>=(s*ret.std())])
+	threshold = 12
 	_max, _min = peakdetect(y, x, threshold)
+	print threshold
 
 	xm = [p[0] for p in _max]
 	ym = [p[1] for p in _max]
