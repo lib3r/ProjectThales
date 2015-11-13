@@ -188,7 +188,7 @@ def evaluate(labelsAndPredictions, data):
 
 if __name__ == "__main__":
 
-    sc = SparkContext(appName = "GdeltDecisionTree")
+    sc = SparkContext(appName = "GdeltDT-MLlib")
     sqlContext = SQLContext(sc)
         
     dataPath = "s3n://gdelt-em/data_test/*"
