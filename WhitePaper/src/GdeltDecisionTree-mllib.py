@@ -163,7 +163,7 @@ if __name__ == "__main__":
     sqlContext = SQLContext(sc)
         
     dataPath = "s3n://gdelt-em/data_test/*"
-    df = sqlContext.read.format("com.databricks.spark.csv").options(header = "true", delimiter="\t").load(dataPath, schema = eventsSchema).partition(200)
+    df = sqlContext.read.format("com.databricks.spark.csv").options(header = "true", delimiter="\t").load(dataPath, schema = eventsSchema).repartition(200)
 
     data = preprocess(df)
     
