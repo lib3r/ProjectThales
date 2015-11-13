@@ -41,7 +41,7 @@ def get_prices(ticker):
 		 FROM symbol AS sym
 		 INNER JOIN daily_price AS dp
 		 ON dp.symbol_id = sym.id
-		 WHERE sym.ticker = '%s'  and dp.price_date > '2014-12-31'
+		 WHERE sym.ticker = '%s'  and dp.price_date > '2000-12-31'
 		 ORDER BY dp.price_date ASC;""" % ticker
 
 	df = psql.read_sql(sql, con=con, index_col='price_date') 
