@@ -194,8 +194,8 @@ if __name__ == "__main__":
     sc = SparkContext(appName = "GdeltDT")
     sqlContext = SQLContext(sc)
         
-    dataPath = "s3n://gdelt-em/data_test/*"
-    df = sqlContext.read.format("com.databricks.spark.csv").options(header = "true", delimiter="\t").load(dataPath, schema = eventsSchema).repartition(200)
+    dataPath = "s3n://gdelt-em/data/*"
+    df = sqlContext.read.format("com.databricks.spark.csv").options(header = "true", delimiter="\t").load(dataPath, schema = eventsSchema)
 
     data = preprocess(df)
 
