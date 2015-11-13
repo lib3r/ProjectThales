@@ -155,6 +155,9 @@ def preprocess(df):
     return data
 
 def evaluate(labelsAndPredictions, data):
+    """
+    Evaluation Metrics
+    """
 
     testErr = labelsAndPredictions.filter(lambda (v, p): v != p).count() / float(testData.count())
     print('Accuracy = ' + str(1 - testErr))

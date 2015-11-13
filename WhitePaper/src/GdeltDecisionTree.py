@@ -128,8 +128,9 @@ def fix_events(df, column_name, column):
     return df
 
 def label(sqldate):
+
     if sqldate in maxima: return 1.0
-    elif sqldate in minima: return 2.0
+    elif sqldate in minima: return -1.0
     else: return 0.0
 
 
@@ -172,6 +173,22 @@ def preprocess(df):
 
     return data
 
+def evaluate(predictionAndLabels):
+    """
+    Evaluation Metrics
+    """
+    metrics = MulticlassMetrics(predictionAndLabels)
+    print metrics.confusionMatrix().toArray()
+    print "False Positive of Lable 0 %f " % metrics.falsePositiveRate(0.0)
+    print "Precision %f " % metrics.precision()
+    print "Weighted False Positive %f" % metrics.weightedFalsePositiveRate
+    print "Weighted Precision %f" % metrics.weightedPrecision
+    print "Weighted FScore %f" % metrics.weightedFMeasure()
+
+    treeModel = model.stages[2]
+    print treeModel # summary only
+
+
 if __name__ == "__main__":
 
     sc = SparkContext(appName = "GdeltDT")
@@ -211,20 +228,9 @@ if __name__ == "__main__":
     print "Predictions"
     predictions.select("prediction", "indexedLabel", "features").show(5)
 
-
     # Select (prediction, true label) and evaluate model
     predictionAndLabels = predictions.select("prediction", "indexedLabel").rdd
-    metrics = MulticlassMetrics(predictionAndLabels)
-    print metrics.confusionMatrix().toArray()
-    print "False Positive of Lable 0 %f " % metrics.falsePositiveRate(0.0)
-    print "Precision %f " % metrics.precision()
-    print "Weighted False Positive %f" % metrics.weightedFalsePositiveRate
-    print "Weighted Precision %f" % metrics.weightedPrecision
-    print "Weighted FScore %f" % metrics.weightedFMeasure()
-
-    treeModel = model.stages[2]
-    print treeModel # summary only
-
+    evaluate(predictionAndLabels)
 
     sc.stop()
 
