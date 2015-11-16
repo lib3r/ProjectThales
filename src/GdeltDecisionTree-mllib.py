@@ -109,7 +109,7 @@ def fix_events(df, column_name, column):
     Appends "1" in front of event columns
     """
 
-    df = df.withColumn("temp", regexp_replace(column_name,"^0","3"))
+    df = df.withColumn("temp", regexp_replace(column_name,"^","**"))
     df = df.drop(column_name)
     df = df.withColumnRenamed("temp",column_name)
     return df
@@ -210,7 +210,7 @@ if __name__ == "__main__":
     (trainingData, testData) = data.randomSplit([0.7, 0.3])
     # Train a DecisionTree model.
     #  Empty categoricalFeaturesInfo indicates all features are continuous.
-    model = DecisionTree.trainClassifier(trainingData, numClasses=3, categoricalFeaturesInfo={},
+    model = DecisionTree.trainClassifier(trainingData, numClasses=3, categoricalFeaturesInfo=categoricalFeaturesInfo,
                                          impurity='gini', maxDepth=5, maxBins=300)
 
     # Evaluate model on test instances and compute test error

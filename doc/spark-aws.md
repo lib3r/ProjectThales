@@ -114,9 +114,9 @@ spark-submit
 
 ```bash
 ./bin/spark-submit \
-  --master spark://ec2-52-34-47-46.us-west-2.compute.amazonaws.com:7077 \
+  --master spark://ec2-52-10-177-7.us-west-2.compute.amazonaws.com:7077 \
   --packages com.databricks:spark-csv_2.10:1.2.0 \
-  /root/ProjectThales/WhitePaper/src/GdeltDecisionTree.py
+  /root/ProjectThales/src/GdeltDecisionTree.py
 ```
   
 
