@@ -152,7 +152,7 @@ def preprocess(df):
 
     labels = df.map(lambda lp: lp.Label).distinct().collect()
     print "DataFrame:"
-    df.take(1)
+    print df.take(1)
     # print "Label Counts:"
     # df.select("EventCode").groupby("EventCode").count().show()
 
@@ -160,7 +160,7 @@ def preprocess(df):
     dataset = df.select("Label","IsRootEvent", "EventCode", "EventBaseCode","EventRootCode", "QuadClass","GoldsteinScale","NumMentions","NumSources","NumArticles","AvgTone").cache()
     df.unpersist()
     print "Dataset:"
-    dataset.take(1)
+    print dataset.take(1)
     # create features in format
     data = event_pipeline(dataset)
     dataset.unpersist()
@@ -211,7 +211,7 @@ if __name__ == "__main__":
         VectorIndexer(inputCol="features", outputCol="indexedFeatures", maxCategories=310).fit(data.toDF())
     data = featureIndexer.transform(data.toDF()).drop("features").rdd.map(lambda row: LabeledPoint(row[0], row[-1]))
     print "Data:"
-    data.take(1)
+    print data.take(1)
     
     # Cross-validation
     (trainingData, testData) = data.randomSplit([0.7, 0.3])
