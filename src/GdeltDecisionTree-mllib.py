@@ -206,16 +206,16 @@ if __name__ == "__main__":
     # Train a DecisionTree model.
     #  Empty categoricalFeaturesInfo indicates all features are continuous.
     model = DecisionTree.trainClassifier(trainingData, numClasses=3, categoricalFeaturesInfo=categoricalFeaturesInfo,
-                                         impurity='gini', maxDepth=20, maxBins=500)
+                                         impurity='gini', maxDepth=15, maxBins=500)
 
     # Evaluate model on test instances and compute test error
     predictions = model.predict(testData.map(lambda x: x.features))
     labelsAndPredictions = testData.map(lambda lp: lp.label).zip(predictions)
 
-    print('Learned classification tree model:')
-    print(model.toDebugString())
 
     evaluate(labelsAndPredictions, data)
+    print('Learned classification tree model:')
+    print(model.toDebugString())
 
     sc.stop()
 
