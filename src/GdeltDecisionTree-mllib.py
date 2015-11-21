@@ -119,7 +119,7 @@ def event_pipeline(dataset):
     pipeline = Pipeline(stages=[EventCodeI, EventBaseCodeI, EventRootCodeI,assembler])
     model = pipeline.fit(dataset)
     output = model.transform(dataset)
-    data = output.map(lambda row: LabeledPoint(row[0], row[-1]))
+    data = output.map(lambda row: LabeledPoint(row[0], row[-1])).cache()
 
     return data
 
@@ -150,21 +150,26 @@ def preprocess(df):
         3: df.select("EventRootCode").distinct().count(),
         4: df.select("QuadClass").distinct().count()}
 
+    labels = df.map(lambda lp: lp.Label).distinct().collect()
+    print "DataFrame:"
+    df.take(1)
     # print "Label Counts:"
     # df.select("EventCode").groupby("EventCode").count().show()
 
-    #only use these columns for features
+    # Feature Selection
     dataset = df.select("Label","IsRootEvent", "EventCode", "EventBaseCode","EventRootCode", "QuadClass","GoldsteinScale","NumMentions","NumSources","NumArticles","AvgTone").cache()
     df.unpersist()
+    print "Dataset:"
+    dataset.take(1)
     # create features in format
     data = event_pipeline(dataset)
     dataset.unpersist()
     # data = dataset.map(lambda row: LabeledPoint(row[0], row[1:]))
     # data.cache()
 
-    return data, categoricalFeaturesInfo
+    return data, categoricalFeaturesInfo, labels
 
-def evaluate(labelsAndPredictions, data):
+def evaluate(labelsAndPredictions, data, labels):
     """
     Evaluation Metrics
     """
@@ -179,7 +184,6 @@ def evaluate(labelsAndPredictions, data):
     print("Recall = %s" % recall)
     print("F1 Score = %s" % f1Score)
     # Statistics by class
-    labels = data.map(lambda lp: lp.label).distinct().collect()
     for label in sorted(labels):
         print("Class %s precision = %s" % (label, metrics.precision(label)))
         print("Class %s recall = %s" % (label, metrics.recall(label)))
@@ -200,16 +204,19 @@ if __name__ == "__main__":
     dataPath = "s3n://gdelt-em/data/*"
     df = sqlContext.read.format("com.databricks.spark.csv").options(header = "true", delimiter="\t").load(dataPath, schema = eventsSchema)
 
-    (data, categoricalFeaturesInfo) = preprocess(df)
+    (data, categoricalFeaturesInfo, labels) = preprocess(df)
 
     # Fix Features for DT, very hack-y
     featureIndexer =\
-        VectorIndexer(inputCol="features", outputCol="indexedFeatures", maxCategories=240).fit(data.toDF())
+        VectorIndexer(inputCol="features", outputCol="indexedFeatures", maxCategories=310).fit(data.toDF())
     data = featureIndexer.transform(data.toDF()).drop("features").rdd.map(lambda row: LabeledPoint(row[0], row[-1]))
+    print "Data:"
+    data.take(1)
     
     # Cross-validation
     (trainingData, testData) = data.randomSplit([0.7, 0.3])
 
+    data.unpersist()
     # Train a DecisionTree model.
     #  Empty categoricalFeaturesInfo indicates all features are continuous.
     model = DecisionTree.trainClassifier(trainingData, numClasses=3, categoricalFeaturesInfo=categoricalFeaturesInfo,
@@ -219,7 +226,9 @@ if __name__ == "__main__":
     predictions = model.predict(testData.map(lambda x: x.features))
     labelsAndPredictions = testData.map(lambda lp: lp.label).zip(predictions)
 
-    evaluate(labelsAndPredictions, data)
+    evaluate(labelsAndPredictions, data, labels)
+    data.unpersist()
+
     print('Learned classification tree model:')
     print(model.toDebugString())
 
