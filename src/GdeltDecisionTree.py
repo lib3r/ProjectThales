@@ -1,4 +1,5 @@
 import re
+import pprint
 
 from pyspark import SparkContext
 from pyspark.sql import SQLContext
@@ -9,7 +10,7 @@ from pyspark.sql import Row
 
 from pyspark.ml import Pipeline
 from pyspark.ml.classification import DecisionTreeClassifier
-from pyspark.ml.feature import StringIndexer, VectorIndexer
+from pyspark.ml.feature import StringIndexer, VectorIndexer, OneHotEncoder, VectorAssembler
 from pyspark.ml.evaluation import MulticlassClassificationEvaluator
 from pyspark.mllib.linalg import Vectors
 from pyspark.mllib.regression import LabeledPoint
@@ -41,11 +42,11 @@ eventsSchema = StructType([
     StructField("Actor2Type1Code",StringType(),True), 
     StructField("Actor2Type2Code",StringType(),True), 
     StructField("Actor2Type3Code",StringType(),True), 
-    StructField("IsRootEvent",StringType(),True), 
+    StructField("IsRootEvent",IntegerType(),True), 
     StructField("EventCode",StringType(),True), 
     StructField("EventBaseCode",StringType(),True), 
     StructField("EventRootCode",StringType(),True), 
-    StructField("QuadClass",StringType(),True), 
+    StructField("QuadClass",IntegerType(),True), 
     StructField("GoldsteinScale",FloatType(),True), 
     StructField("NumMentions",IntegerType(),True), 
     StructField("NumSources",IntegerType(),True), 
@@ -102,37 +103,47 @@ dates = [
     20130729, 20130627, 20130502, 20130415, 20121203, 20120926, 20120905, 
     20120731, 20120329]
 
-def summarize(dataset):
-    """
-    Stats about the dataset
-    """
-    print("schema: %s" % dataset.schema().json())
-    labels = dataset.map(lambda r: r.label)
-    print("label average: %f" % labels.mean())
-    features = dataset.map(lambda r: r.features)
-    summary = Statistics.colStats(features)
-    print("features average: %r" % summary.mean())
-
 def fix_events(df, column_name, column):
     """ 
     Appends "1" in front of event columns
     """
-    # event_codes = udf(lambda x: "1"+x , StringType())
-    # df = df.withColumn("Temp",event_codes(column))
-    # df = df.drop(column_name)
-    # df = df.withColumnRenamed("Temp",column_name).cache()    
-
     df = df.withColumn("temp", regexp_replace(column_name,"^0","3"))
     df = df.drop(column_name)
     df = df.withColumnRenamed("temp",column_name)
     return df
 
-def label(sqldate):
+def events(df,column_name):
+    i = column_name+"I"
+    v = column_name+"V"
+    stringIndexer = StringIndexer(inputCol=column_name, outputCol=i)
+    model = stringIndexer.fit(df)
+    indexed = model.transform(df)
+    encoder = OneHotEncoder(inputCol=i, outputCol=v)
+    encoded = encoder.transform(indexed)
+    return encoded
 
+def label(sqldate):
     if sqldate in maxima: return 1.0
     elif sqldate in minima: return -1.0
     else: return 0.0
 
+def event_pipeline(dataset):
+    EventCodeI = StringIndexer(inputCol="EventCode", outputCol="EventCodeI")
+    EventCodeV = OneHotEncoder(dropLast=True, inputCol="EventCodeI", outputCol="EventCodeV")
+
+    EventRootCodeI = StringIndexer(inputCol="EventRootCode", outputCol="EventRootCodeI")
+    EventRootCodeV = OneHotEncoder(dropLast=True, inputCol="EventRootCodeI", outputCol="EventRootCodeV")
+
+    EventBaseCodeI = StringIndexer(inputCol="EventBaseCode", outputCol="EventBaseCodeI")
+    EventBaseCodeV = OneHotEncoder(dropLast=True, inputCol="EventBaseCodeI", outputCol="EventBaseCodeV")
+
+    assembler = VectorAssembler(inputCols=["IsRootEvent", "EventCodeV", "EventBaseCodeV","EventRootCodeV", "QuadClass","GoldsteinScale","NumMentions","NumSources","NumArticles","AvgTone"], outputCol="features")
+
+    pipeline = Pipeline(stages=[EventCodeI, EventCodeV, EventRootCodeI, EventRootCodeV,EventBaseCodeI,EventBaseCodeV,assembler])
+
+    model = pipeline.fit(dataset)
+    output = model.transform(dataset)
+    data = output.map(lambda row: LabeledPoint(row[0], row[-1])).toDF().cache()
 
 
 def preprocess(df):
@@ -141,44 +152,52 @@ def preprocess(df):
     """
 
     # remove troublesome rows
-    df = df.filter("EventRootCode != '--'")
+    df = df.filter("EventRootCode != '--'") 
     df = df.filter("EventRootCode != 'X'")
 
 
     # fix event columns
-    df = fix_events(df,"EventCode",df.EventCode)
-    df = fix_events(df,"EventBaseCode",df.EventBaseCode)
-    df = fix_events(df,"EventRootCode",df.EventRootCode)
-    # df = df = df.withColumn("EventCode1", regexp_replace("EventCode","^0","3")).cache()
-    # df = df = df.withColumn("EventBaseCode1", regexp_replace("EventCode","^0","3")).cache()
-    # df = df = df.withColumn("EventRootCode1", regexp_replace("EventCode","^0","3")).cache()
-    # df = df.drop("EventCode").drop("EventBaseCode").drop("EventRootCode").cache()
-    # df = df.withColumnRenamed("EventCode1","EventCode").withColumnRenamed("EventBaseCode1","EventBaseCode").withColumnRenamed("EventRootCode1","EventRootCode").cache()
+    # df = fix_events(df,"EventCode",df.EventCode)
+    # df = fix_events(df,"EventBaseCode",df.EventBaseCode)
+    # df = fix_events(df,"EventRootCode",df.EventRootCode)
+
+    # df = events(df,"EventCode")
+    # df = events(df,"EventBaseCode")
+    # df = events(df,"EventRootCode")
 
 
     # add label to df
     labeler = udf(label, FloatType())
-    df = df.withColumn('Label',labeler(df.SQLDATE)).cache()
+    df = df.withColumn('Label',labeler(df.SQLDATE))
     # df = df.withColumn('Label',df.SQLDATE.isin(dates))
 
-    print "Label Counts:"
-    df.select("Label").groupby("Label").count().show()
+    # print "Label Counts:"
+    # df.select("EventCode").groupby("EventCode").count().show()
 
     #only use these columns for features
-    dataset = df.select("Label","IsRootEvent", "EventCode", "EventBaseCode","EventRootCode", "QuadClass","GoldsteinScale","NumMentions","NumSources","NumArticles","AvgTone").cache()
+    dataset = df.select("Label","IsRootEvent", "EventCode", "EventBaseCode","EventRootCode", "QuadClass","GoldsteinScale","NumMentions","NumSources","NumArticles","AvgTone")
+
+    data =  event_pipeline(dataset)
 
     # create features in format
-    data = dataset.map(lambda row: LabeledPoint(row[0], Vectors.dense(row[1:]))).toDF()
-    data.cache()
+    # data = dataset.map(lambda row: LabeledPoint(row[0], Vectors.dense(row[1:]))).toDF()
+    # data.cache()
 
     return data
 
-def evaluate(predictionAndLabels):
+def evaluate(predictions):
     """
     Evaluation Metrics
     """
-    metrics = MulticlassMetrics(predictionAndLabels)
+    # label to indexedLabel mappings
+    # out = sorted(set([(i[0], i[1]) for i in predictions.select(predictions.label, predictions.indexedLabel).collect()]), key=lambda x: x[0])
 
+    print "Predictions"
+    predictions.select("prediction", "indexedLabel", "features").show(5)
+
+    # Select (prediction, true label) and evaluate model
+    predictionAndLabels = predictions.select("prediction", "indexedLabel").rdd
+    metrics = MulticlassMetrics(predictionAndLabels)
     # Overall statistics
     precision = metrics.precision()
     recall = metrics.recall()
@@ -187,22 +206,18 @@ def evaluate(predictionAndLabels):
     print("Precision = %s" % precision)
     print("Recall = %s" % recall)
     print("F1 Score = %s" % f1Score)
-
     # Statistics by class
     labels = data.map(lambda lp: lp.label).distinct().collect()
     for label in sorted(labels):
         print("Class %s precision = %s" % (label, metrics.precision(label)))
         print("Class %s recall = %s" % (label, metrics.recall(label)))
         print("Class %s F1 Measure = %s" % (label, metrics.fMeasure(label, beta=1.0)))
-
     # Weighted stats
     print("Weighted recall = %s" % metrics.weightedRecall)
     print("Weighted precision = %s" % metrics.weightedPrecision)
     print("Weighted F(1) Score = %s" % metrics.weightedFMeasure())
     print("Weighted F(0.5) Score = %s" % metrics.weightedFMeasure(beta=0.5))
     print("Weighted false positive rate = %s" % metrics.weightedFalsePositiveRate)
-
-
     treeModel = model.stages[2]
     print treeModel # summary only
 
@@ -212,8 +227,8 @@ if __name__ == "__main__":
     sc = SparkContext(appName = "GdeltDT")
     sqlContext = SQLContext(sc)
         
-    dataPath = "s3n://gdelt-em/data/*"
-    df = sqlContext.read.format("com.databricks.spark.csv").options(header = "true", delimiter="\t").load(dataPath, schema = eventsSchema)
+    dataPath = "s3n://gdelt-em/data_test/*"
+    df = sqlContext.read.format("com.databricks.spark.csv").options(header = "true", delimiter="\t").load(dataPath, schema = eventsSchema).repartition(200)
 
     data = preprocess(df)
 
@@ -223,13 +238,13 @@ if __name__ == "__main__":
     # Automatically identify categorical features, and index them.
     # We specify maxCategories so features with > 4 distinct values are treated as continuous.
     featureIndexer =\
-        VectorIndexer(inputCol="features", outputCol="indexedFeatures", maxCategories=300).fit(data)
+        VectorIndexer(inputCol="features", outputCol="indexedFeatures", maxCategories=40).fit(data)
 
     # Split the data into training and test sets (30% held out for testing)
     (trainingData, testData) = data.randomSplit([0.7, 0.3])
 
     # Train a DecisionTree model.
-    dt = DecisionTreeClassifier(labelCol="indexedLabel", featuresCol="indexedFeatures",maxBins=300)
+    dt = DecisionTreeClassifier(labelCol="indexedLabel", featuresCol="indexedFeatures",maxBins=40)
 
     # Chain indexers and tree in a Pipeline
     pipeline = Pipeline(stages=[labelIndexer, featureIndexer, dt])
@@ -241,13 +256,17 @@ if __name__ == "__main__":
     predictions = model.transform(testData)
 
     # Select example rows to display.
-    print "Predictions"
-    predictions.select("prediction", "indexedLabel", "features").show(5)
 
-    # Select (prediction, true label) and evaluate model
-    predictionAndLabels = predictions.select("prediction", "indexedLabel").rdd
-    evaluate(predictionAndLabels)
+    evaluate(predictions)
 
     sc.stop()
+
+
+# EventCodeI = StringIndexer(inputCol="EventCode", outputCol="EventCodeI")
+# model = EventCodeI.fit(df)
+# indexed = model.transform(df)
+# EventCodeV = OneHotEncoder(dropLast=False, inputCol="EventCodeI", outputCol="EventCodeV")
+# encoded = EventCodeV.transform(indexed)
+# out = sorted(set([(i[0], i[1]) for i in indexed.select(indexed.EventCode, indexed.EventCodeI).collect()]), key=lambda x: x[0])
 
 
