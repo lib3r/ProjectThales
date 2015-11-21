@@ -208,7 +208,7 @@ def evaluate(predictions):
     print("Recall = %s" % recall)
     print("F1 Score = %s" % f1Score)
     # Statistics by class
-    labels = data.map(lambda lp: lp.label).distinct().collect()
+    labels = predictions.map(lambda lp: lp.label).distinct().collect()
     for label in sorted(labels):
         print("Class %s precision = %s" % (label, metrics.precision(label)))
         print("Class %s recall = %s" % (label, metrics.recall(label)))
@@ -239,7 +239,7 @@ if __name__ == "__main__":
     # Automatically identify categorical features, and index them.
     # We specify maxCategories so features with > 4 distinct values are treated as continuous.
     featureIndexer =\
-        VectorIndexer(inputCol="features", outputCol="indexedFeatures", maxCategories=40).fit(data)
+        VectorIndexer(inputCol="features", outputCol="indexedFeatures", maxCategories=240).fit(data)
 
     # Split the data into training and test sets (30% held out for testing)
     (trainingData, testData) = data.randomSplit([0.7, 0.3])
