@@ -110,6 +110,8 @@ def label(sqldate):
     else: return 0.0
 
 def event_pipeline(dataset):
+    """
+    """
     EventCodeI = StringIndexer(inputCol="EventCode", outputCol="EventCodeI")
     EventBaseCodeI = StringIndexer(inputCol="EventBaseCode", outputCol="EventBaseCodeI")
     EventRootCodeI = StringIndexer(inputCol="EventRootCode", outputCol="EventRootCodeI")
@@ -141,17 +143,26 @@ def preprocess(df):
     df = df.withColumn('Label',labeler(df.SQLDATE)).cache()
     # df = df.withColumn('Label',df.SQLDATE.isin(dates))
 
+    categoricalFeaturesInfo = {
+        0: df.select("IsRootEvent").distinct().count(), 
+        1: df.select("EventCode").distinct().count(),
+        2: df.select("EventBaseCode").distinct().count(),
+        3: df.select("EventRootCode").distinct().count(),
+        4: df.select("QuadClass").distinct().count()}
+
     # print "Label Counts:"
     # df.select("EventCode").groupby("EventCode").count().show()
 
     #only use these columns for features
     dataset = df.select("Label","IsRootEvent", "EventCode", "EventBaseCode","EventRootCode", "QuadClass","GoldsteinScale","NumMentions","NumSources","NumArticles","AvgTone").cache()
+    df.unpersist()
     # create features in format
     data = event_pipeline(dataset)
+    dataset.unpersist()
     # data = dataset.map(lambda row: LabeledPoint(row[0], row[1:]))
     # data.cache()
 
-    return data
+    return data, categoricalFeaturesInfo
 
 def evaluate(labelsAndPredictions, data):
     """
@@ -186,23 +197,19 @@ if __name__ == "__main__":
     sc = SparkContext(appName = "GdeltDT-MLlib")
     sqlContext = SQLContext(sc)
         
-    dataPath = "s3n://gdelt-em/data_test/*"
-    df = sqlContext.read.format("com.databricks.spark.csv").options(header = "true", delimiter="\t").load(dataPath, schema = eventsSchema).repartition(200)
+    dataPath = "s3n://gdelt-em/data/*"
+    df = sqlContext.read.format("com.databricks.spark.csv").options(header = "true", delimiter="\t").load(dataPath, schema = eventsSchema)
 
-    data = preprocess(df)
+    (data, categoricalFeaturesInfo) = preprocess(df)
+
+    # Fix Features for DT, very hack-y
     featureIndexer =\
         VectorIndexer(inputCol="features", outputCol="indexedFeatures", maxCategories=240).fit(data.toDF())
     data = featureIndexer.transform(data.toDF()).drop("features").rdd.map(lambda row: LabeledPoint(row[0], row[-1]))
     
-    categoricalFeaturesInfo = {
-        0: df.select("IsRootEvent").distinct().count(), 
-        1: df.select("EventCode").distinct().count(),
-        2: df.select("EventBaseCode").distinct().count(),
-        3: df.select("EventRootCode").distinct().count(),
-        4: df.select("QuadClass").distinct().count()}
-
-
+    # Cross-validation
     (trainingData, testData) = data.randomSplit([0.7, 0.3])
+
     # Train a DecisionTree model.
     #  Empty categoricalFeaturesInfo indicates all features are continuous.
     model = DecisionTree.trainClassifier(trainingData, numClasses=3, categoricalFeaturesInfo=categoricalFeaturesInfo,
@@ -211,7 +218,6 @@ if __name__ == "__main__":
     # Evaluate model on test instances and compute test error
     predictions = model.predict(testData.map(lambda x: x.features))
     labelsAndPredictions = testData.map(lambda lp: lp.label).zip(predictions)
-
 
     evaluate(labelsAndPredictions, data)
     print('Learned classification tree model:')
