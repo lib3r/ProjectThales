@@ -7,6 +7,8 @@ from pyspark.sql.functions import *
 from pyspark.sql.functions import udf
 from pyspark.sql import Row
 
+from pyspark.ml import Pipeline
+from pyspark.ml.feature import StringIndexer, VectorIndexer, OneHotEncoder, VectorAssembler
 from pyspark.mllib.tree import DecisionTree, DecisionTreeModel
 from pyspark.mllib.linalg import Vectors
 from pyspark.mllib.regression import LabeledPoint
@@ -38,11 +40,11 @@ eventsSchema = StructType([
     StructField("Actor2Type1Code",StringType(),True), 
     StructField("Actor2Type2Code",StringType(),True), 
     StructField("Actor2Type3Code",StringType(),True), 
-    StructField("IsRootEvent",StringType(),True), 
+    StructField("IsRootEvent",IntegerType(),True), 
     StructField("EventCode",StringType(),True), 
     StructField("EventBaseCode",StringType(),True), 
     StructField("EventRootCode",StringType(),True), 
-    StructField("QuadClass",StringType(),True), 
+    StructField("QuadClass",IntegerType(),True), 
     StructField("GoldsteinScale",FloatType(),True), 
     StructField("NumMentions",IntegerType(),True), 
     StructField("NumSources",IntegerType(),True), 
@@ -93,23 +95,11 @@ dates = [
     20130729, 20130627, 20130502, 20130415, 20121203, 20120926, 20120905, 
     20120731, 20120329]
 
-def summarize(dataset):
-    """
-    Stats about the dataset
-    """
-    print("schema: %s" % dataset.schema().json())
-    labels = dataset.map(lambda r: r.label)
-    print("label average: %f" % labels.mean())
-    features = dataset.map(lambda r: r.features)
-    summary = Statistics.colStats(features)
-    print("features average: %r" % summary.mean())
-
 def fix_events(df, column_name, column):
     """ 
     Appends "1" in front of event columns
     """
-
-    df = df.withColumn("temp", regexp_replace(column_name,"^","**"))
+    df = df.withColumn("temp", regexp_replace(column_name,"^0","3"))
     df = df.drop(column_name)
     df = df.withColumnRenamed("temp",column_name)
     return df
@@ -119,38 +109,47 @@ def label(sqldate):
     elif sqldate in minima: return 2.0
     else: return 0.0
 
+def event_pipeline(dataset):
+    EventCodeI = StringIndexer(inputCol="EventCode", outputCol="EventCodeI")
+    EventBaseCodeI = StringIndexer(inputCol="EventBaseCode", outputCol="EventBaseCodeI")
+    EventRootCodeI = StringIndexer(inputCol="EventRootCode", outputCol="EventRootCodeI")
+    assembler = VectorAssembler(inputCols=["IsRootEvent", "EventCodeI", "EventBaseCodeI","EventRootCodeI", "QuadClass","GoldsteinScale","NumMentions","NumSources","NumArticles","AvgTone"], outputCol="features")
+    pipeline = Pipeline(stages=[EventCodeI, EventBaseCodeI, EventRootCodeI,assembler])
+    model = pipeline.fit(dataset)
+    output = model.transform(dataset)
+    data = output.map(lambda row: LabeledPoint(row[0], row[-1]))
 
+    return data
 
 def preprocess(df):
     """ 
     Convert GDELT files into a format for DecisionTree
     """
-
     # remove troublesome rows
     df = df.filter("EventRootCode != '--'")
     df = df.filter("EventRootCode != 'X'")
 
 
     # fix event columns
-    df = fix_events(df,"EventCode",df.EventCode)
-    df = fix_events(df,"EventBaseCode",df.EventBaseCode)
-    df = fix_events(df,"EventRootCode",df.EventRootCode).cache()
+    # df = fix_events(df,"EventCode",df.EventCode)
+    # df = fix_events(df,"EventBaseCode",df.EventBaseCode)
+    # df = fix_events(df,"EventRootCode",df.EventRootCode)
 
 
     # add label to df
     labeler = udf(label, FloatType())
-    df = df.withColumn('Label',labeler(df.SQLDATE))
+    df = df.withColumn('Label',labeler(df.SQLDATE)).cache()
     # df = df.withColumn('Label',df.SQLDATE.isin(dates))
 
-    print "Label Counts:"
-    df.select("Label").groupby("Label").count().show()
+    # print "Label Counts:"
+    # df.select("EventCode").groupby("EventCode").count().show()
 
     #only use these columns for features
     dataset = df.select("Label","IsRootEvent", "EventCode", "EventBaseCode","EventRootCode", "QuadClass","GoldsteinScale","NumMentions","NumSources","NumArticles","AvgTone").cache()
-
     # create features in format
-    data = dataset.map(lambda row: LabeledPoint(row[0], row[1:]))
-    data.cache()
+    data = event_pipeline(dataset)
+    # data = dataset.map(lambda row: LabeledPoint(row[0], row[1:]))
+    # data.cache()
 
     return data
 
@@ -158,13 +157,8 @@ def evaluate(labelsAndPredictions, data):
     """
     Evaluation Metrics
     """
-
-    testErr = labelsAndPredictions.filter(lambda (v, p): v != p).count() / float(testData.count())
-    print('Accuracy = ' + str(1 - testErr))
-
     # Instantiate metrics object
     metrics = MulticlassMetrics(labelsAndPredictions)
-
     # Overall statistics
     precision = metrics.precision()
     recall = metrics.recall()
@@ -173,14 +167,12 @@ def evaluate(labelsAndPredictions, data):
     print("Precision = %s" % precision)
     print("Recall = %s" % recall)
     print("F1 Score = %s" % f1Score)
-
     # Statistics by class
     labels = data.map(lambda lp: lp.label).distinct().collect()
     for label in sorted(labels):
         print("Class %s precision = %s" % (label, metrics.precision(label)))
         print("Class %s recall = %s" % (label, metrics.recall(label)))
         print("Class %s F1 Measure = %s" % (label, metrics.fMeasure(label, beta=1.0)))
-
     # Weighted stats
     print("Weighted recall = %s" % metrics.weightedRecall)
     print("Weighted precision = %s" % metrics.weightedPrecision)
@@ -198,20 +190,23 @@ if __name__ == "__main__":
     df = sqlContext.read.format("com.databricks.spark.csv").options(header = "true", delimiter="\t").load(dataPath, schema = eventsSchema).repartition(200)
 
     data = preprocess(df)
+    featureIndexer =\
+        VectorIndexer(inputCol="features", outputCol="indexedFeatures", maxCategories=240).fit(data.toDF())
+    data = featureIndexer.transform(data.toDF()).drop("features").rdd.map(lambda row: LabeledPoint(row[0], row[-1]))
     
     categoricalFeaturesInfo = {
-        1: df.select("IsRootEvent").distinct().count(), 
-        2: df.select("EventCode").distinct().count(),
-        3: df.select("EventBaseCode").distinct().count(),
-        4: df.select("EventRootCode").distinct().count(),
-        5: df.select("QuadClass").distinct().count()}
+        0: df.select("IsRootEvent").distinct().count(), 
+        1: df.select("EventCode").distinct().count(),
+        2: df.select("EventBaseCode").distinct().count(),
+        3: df.select("EventRootCode").distinct().count(),
+        4: df.select("QuadClass").distinct().count()}
 
 
     (trainingData, testData) = data.randomSplit([0.7, 0.3])
     # Train a DecisionTree model.
     #  Empty categoricalFeaturesInfo indicates all features are continuous.
     model = DecisionTree.trainClassifier(trainingData, numClasses=3, categoricalFeaturesInfo=categoricalFeaturesInfo,
-                                         impurity='gini', maxDepth=5, maxBins=300)
+                                         impurity='gini', maxDepth=20, maxBins=500)
 
     # Evaluate model on test instances and compute test error
     predictions = model.predict(testData.map(lambda x: x.features))
@@ -224,4 +219,25 @@ if __name__ == "__main__":
 
     sc.stop()
 
-
+"""  
+>>> df.select("Label").distinct().count()
+3                                                                               
+>>> df.select("EventCode").distinct().count()
+240                                                                             
+>>> df.select("AvgTone").distinct().count()
+499727                                                                          
+>>> df.select("NumArticles").distinct().count()
+1240                                                                            
+>>> df.select("NumSources").distinct().count()
+225                                                                             
+>>> df.select("NumMentions").distinct().count()
+1283                                                                            
+>>> df.select("GoldsteinScale").distinct().count()
+42                                                                              
+>>> df.select("EventBaseCode").distinct().count()
+142                                                                             
+>>> df.select("EventRootCode").distinct().count()
+20                                                                              
+>>> df.select("IsRootEvent").distinct().count()
+2 
+"""
