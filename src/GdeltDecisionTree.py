@@ -144,6 +144,7 @@ def event_pipeline(dataset):
     model = pipeline.fit(dataset)
     output = model.transform(dataset)
     data = output.map(lambda row: LabeledPoint(row[0], row[-1])).toDF().cache()
+    return data
 
 
 def preprocess(df):
