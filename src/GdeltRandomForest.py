@@ -6,7 +6,7 @@ from pyspark.sql.functions import udf
 
 from pyspark.ml import Pipeline
 from pyspark.ml.classification import RandomForestClassifier
-from pyspark.ml.feature import StringIndexer, VectorIndexer
+from pyspark.ml.feature import StringIndexer, VectorIndexer, OneHotEncoder, VectorAssembler
 from pyspark.mllib.evaluation import MulticlassMetrics
 from pyspark.mllib.regression import LabeledPoint
 
@@ -36,11 +36,11 @@ eventsSchema = StructType([
     StructField("Actor2Type1Code",StringType(),True), 
     StructField("Actor2Type2Code",StringType(),True), 
     StructField("Actor2Type3Code",StringType(),True), 
-    StructField("IsRootEvent",StringType(),True), 
+    StructField("IsRootEvent",IntegerType(),True), 
     StructField("EventCode",StringType(),True), 
     StructField("EventBaseCode",StringType(),True), 
     StructField("EventRootCode",StringType(),True), 
-    StructField("QuadClass",StringType(),True), 
+    StructField("QuadClass",IntegerType(),True), 
     StructField("GoldsteinScale",FloatType(),True), 
     StructField("NumMentions",IntegerType(),True), 
     StructField("NumSources",IntegerType(),True), 
@@ -124,17 +124,12 @@ def label(sqldate):
 def event_pipeline(dataset):
     EventCodeI = StringIndexer(inputCol="EventCode", outputCol="EventCodeI")
     EventCodeV = OneHotEncoder(dropLast=True, inputCol="EventCodeI", outputCol="EventCodeV")
-
     EventRootCodeI = StringIndexer(inputCol="EventRootCode", outputCol="EventRootCodeI")
     EventRootCodeV = OneHotEncoder(dropLast=True, inputCol="EventRootCodeI", outputCol="EventRootCodeV")
-
     EventBaseCodeI = StringIndexer(inputCol="EventBaseCode", outputCol="EventBaseCodeI")
     EventBaseCodeV = OneHotEncoder(dropLast=True, inputCol="EventBaseCodeI", outputCol="EventBaseCodeV")
-
     assembler = VectorAssembler(inputCols=["IsRootEvent", "EventCodeV", "EventBaseCodeV", "EventRootCodeV", "QuadClass", "GoldsteinScale", "NumMentions", "NumSources", "NumArticles", "AvgTone"], outputCol="features")
-
     pipeline = Pipeline(stages=[EventCodeI, EventCodeV, EventRootCodeI, EventRootCodeV, EventBaseCodeI, EventBaseCodeV, assembler])
-
     model = pipeline.fit(dataset)
     output = model.transform(dataset)
     data = output.map(lambda row: LabeledPoint(row[0], row[-1])).toDF().cache()
@@ -182,36 +177,16 @@ def preprocess(df):
     # remove troublesome rows
     df = df.filter("EventRootCode != '--'")
     df = df.filter("EventRootCode != 'X'")
-
-
-    # fix event columns
-    # df = fix_events(df,"EventCode",df.EventCode)
-    # df = fix_events(df,"EventBaseCode",df.EventBaseCode)
-    # df = fix_events(df,"EventRootCode",df.EventRootCode)
-
-    # df = events(df,"EventCode")
-    # df = events(df,"EventBaseCode")
-    # df = events(df,"EventRootCode")
-
-
     # add label to df
     labeler = udf(label, FloatType())
     df = df.withColumn('Label', labeler(df.SQLDATE))
-    # df = df.withColumn('Label',df.SQLDATE.isin(dates))
-
-    # print "Label Counts:"
-    # df.select("EventCode").groupby("EventCode").count().show()
-
     #only use these columns for features
     dataset = df.select("Label", "IsRootEvent", "EventCode", "EventBaseCode", "EventRootCode", "QuadClass", "GoldsteinScale", "NumMentions", "NumSources", "NumArticles", "AvgTone")
     #dataset = df.select("Label", "IsRootEvent", "EventCode", "AvgTone")
-
     data = event_pipeline(dataset)
-
     # create features in format
     # data = dataset.map(lambda row: LabeledPoint(row[0], Vectors.dense(row[1:]))).toDF()
     # data.cache()
-
     return data
 
 def evaluate(predictions):
@@ -220,10 +195,8 @@ def evaluate(predictions):
     """
     # label to indexedLabel mappings
     # out = sorted(set([(i[0], i[1]) for i in predictions.select(predictions.label, predictions.indexedLabel).collect()]), key=lambda x: x[0])
-
     print "Predictions"
     predictions.select("prediction", "indexedLabel", "features").show(5)
-
     # Select (prediction, true label) and evaluate model
     predictionAndLabels = predictions.select("prediction", "indexedLabel").rdd
     metrics = MulticlassMetrics(predictionAndLabels)
@@ -265,13 +238,13 @@ if __name__ == "__main__":
     # Automatically identify categorical features, and index them.
     # We specify maxCategories so features with > 4 distinct values are treated as continuous.
     featureIndexer =\
-        VectorIndexer(inputCol="features", outputCol="indexedFeatures", maxCategories=240).fit(data)
+        VectorIndexer(inputCol="features", outputCol="indexedFeatures", maxCategories=310).fit(data)
 
     # Split the data into training and test sets (30% held out for testing)
     (trainingData, testData) = data.randomSplit([0.7, 0.3])
 
     # Train a RandomForest model.
-    rf = RandomForestClassifier(labelCol="indexedLabel", featuresCol="indexedFeatures", maxDepth=25, maxBins=40, featureSubsetStrategy="auto", seed=12345)
+    rf = RandomForestClassifier(labelCol="indexedLabel", featuresCol="indexedFeatures", numTrees=1, maxDepth=30, maxBins=500, featureSubsetStrategy="auto", seed=12345)
 
     # Chain indexers and tree in a Pipeline
     pipeline = Pipeline(stages=[labelIndexer, featureIndexer, rf])
