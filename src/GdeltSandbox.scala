@@ -12,31 +12,137 @@ import org.apache.spark.ml.Pipeline
 
 object GdeltSandbox {
 
-	def main(args: Array[String]) {
-		// val conf = new SparkConf().setAppName(appName).setMaster(master)
-		// val sc = new SparkContext(conf)
+	val eventsSchema = StructType(Array(
+	StructField("GLOBALEVENTID",IntegerType,false),
+	StructField("SQLDATE",IntegerType,true),
+	StructField("MonthYear",IntegerType,true),
+	StructField("Year",IntegerType,true),
+	StructField("FractionDate",FloatType,true),
+	StructField("Actor1Code",StringType,true),
+	StructField("Actor1Name",StringType,true),
+	StructField("Actor1CountryCode",StringType,true),
+	StructField("Actor1KnownGroupCode",StringType,true),
+	StructField("Actor1EthnicCode",StringType,true),
+	StructField("Actor1Religion1Code",StringType,true),
+	StructField("Actor1Religion2Code",StringType,true),
+	StructField("Actor1Type1Code",StringType,true),
+	StructField("Actor1Type2Code",StringType,true),
+	StructField("Actor1Type3Code",StringType,true),
+	StructField("Actor2Code",StringType,true),
+	StructField("Actor2Name",StringType,true),
+	StructField("Actor2CountryCode",StringType,true),
+	StructField("Actor2KnownGroupCode",StringType,true),
+	StructField("Actor2EthnicCode",StringType,true),
+	StructField("Actor2Religion1Code",StringType,true),
+	StructField("Actor2Religion2Code",StringType,true),
+	StructField("Actor2Type1Code",StringType,true),
+	StructField("Actor2Type2Code",StringType,true),
+	StructField("Actor2Type3Code",StringType,true),
+	StructField("IsRootEvent",StringType,true),
+	StructField("EventCode",StringType,true),
+	StructField("EventBaseCode",StringType,true),
+	StructField("EventRootCode",StringType,true),
+	StructField("QuadClass",StringType,true),
+	StructField("GoldsteinScale",StringType,true),
+	StructField("NumMentions",StringType,true),
+	StructField("NumSources",StringType,true),
+	StructField("NumArticles",StringType,true),
+	StructField("AvgTone",StringType,true),
+	StructField("Actor1Geo_Type",StringType,true),
+	StructField("Actor1Geo_FullName",StringType,true),
+	StructField("Actor1Geo_CountryCode",StringType,true),
+	StructField("Actor1Geo_ADM1Code",StringType,true),
+	StructField("Actor1Geo_Lat",StringType,true),
+	StructField("Actor1Geo_Long",StringType,true),
+	StructField("Actor1Geo_FeatureID",StringType,true),
+	StructField("Actor2Geo_Type",StringType,true),
+	StructField("Actor2Geo_FullName",StringType,true),
+	StructField("Actor2Geo_CountryCode",StringType,true),
+	StructField("Actor2Geo_ADM1Code",StringType,true),
+	StructField("Actor2Geo_Lat",StringType,true),
+	StructField("Actor2Geo_Long",StringType,true),
+	StructField("Actor2Geo_FeatureID",StringType,true),
+	StructField("ActionGeo_Type",StringType,true),
+	StructField("ActionGeo_FullName",StringType,true),
+	StructField("ActionGeo_CountryCode",StringType,true),
+	StructField("ActionGeo_ADM1Code",StringType,true),
+	StructField("ActionGeo_Lat",StringType,true),
+	StructField("ActionGeo_Long",StringType,true),
+	StructField("ActionGeo_FeatureID",StringType,true),
+	StructField("DATEADDED",StringType,true),
+	StructField("SOURCEURL",StringType,true)))	
 
-		// val data = sc.textFile("s3n://gdelt-em/data/*").cache()
-		// val rowRDD = data.map(_.split("\t")).map(d => Row.fromSeq(d.toSeq))
-		val sqlContext = new org.apache.spark.sql.SQLContext(sc)
-		
-		val eventsSchema = StructType(Array( StructField("GLOBALEVENTID",IntegerType,false), StructField("SQLDATE",IntegerType,true), StructField("MonthYear",IntegerType,true), StructField("Year",IntegerType,true), StructField("FractionDate",FloatType,true), StructField("Actor1Code",StringType,true), StructField("Actor1Name",StringType,true), StructField("Actor1CountryCode",StringType,true), StructField("Actor1KnownGroupCode",StringType,true), StructField("Actor1EthnicCode",StringType,true), StructField("Actor1Religion1Code",StringType,true), StructField("Actor1Religion2Code",StringType,true), StructField("Actor1Type1Code",StringType,true), StructField("Actor1Type2Code",StringType,true), StructField("Actor1Type3Code",StringType,true), StructField("Actor2Code",StringType,true), StructField("Actor2Name",StringType,true), StructField("Actor2CountryCode",StringType,true), StructField("Actor2KnownGroupCode",StringType,true), StructField("Actor2EthnicCode",StringType,true), StructField("Actor2Religion1Code",StringType,true), StructField("Actor2Religion2Code",StringType,true), StructField("Actor2Type1Code",StringType,true), StructField("Actor2Type2Code",StringType,true), StructField("Actor2Type3Code",StringType,true), StructField("IsRootEvent",StringType,true), StructField("EventCode",StringType,true), StructField("EventBaseCode",StringType,true), StructField("EventRootCode",StringType,true), StructField("QuadClass",StringType,true), StructField("GoldsteinScale",StringType,true), StructField("NumMentions",StringType,true), StructField("NumSources",StringType,true), StructField("NumArticles",StringType,true), StructField("AvgTone",StringType,true), StructField("Actor1Geo_Type",StringType,true), StructField("Actor1Geo_FullName",StringType,true), StructField("Actor1Geo_CountryCode",StringType,true), StructField("Actor1Geo_ADM1Code",StringType,true), StructField("Actor1Geo_Lat",StringType,true), StructField("Actor1Geo_Long",StringType,true), StructField("Actor1Geo_FeatureID",StringType,true), StructField("Actor2Geo_Type",StringType,true), StructField("Actor2Geo_FullName",StringType,true), StructField("Actor2Geo_CountryCode",StringType,true), StructField("Actor2Geo_ADM1Code",StringType,true), StructField("Actor2Geo_Lat",StringType,true), StructField("Actor2Geo_Long",StringType,true), StructField("Actor2Geo_FeatureID",StringType,true), StructField("ActionGeo_Type",StringType,true), StructField("ActionGeo_FullName",StringType,true), StructField("ActionGeo_CountryCode",StringType,true), StructField("ActionGeo_ADM1Code",StringType,true), StructField("ActionGeo_Lat",StringType,true), StructField("ActionGeo_Long",StringType,true), StructField("ActionGeo_FeatureID",StringType,true), StructField("DATEADDED",StringType,true), StructField("SOURCEURL",StringType,true)))			
-			// val df = sqlContext.createDataFrame(rowRDD, eventsSchema)
-		
+	val dates = Array(
+	20150817, 20150723, 20150612, 20150427, 20150126, 20150107, 20141009, 
+	20140819, 20140616, 20140410, 20140219, 20131204, 20131014, 20130711, 
+	20130529, 20130419, 20130206, 20121022, 20120910, 20120809, 20120504, 
+	20120302, 20150826, 20150803, 20150708, 20150507, 20150206, 20150119, 
+	20141027, 20140828, 20140619, 20140519, 20140320, 20140120, 20131113, 
+	20130729, 20130627, 20130502, 20130415, 20121203, 20120926, 20120905, 
+	20120731, 20120329)
+
+	val maxima = Array(
+	20150817, 20150723, 20150612, 20150427, 20150126, 20150107, 20141009,
+	20140819, 20140616, 20140410, 20140219, 20131204, 20131014, 20130711, 
+	20130529, 20130419, 20130206, 20121022, 20120910, 20120809, 20120504, 
+	20120302)
+
+	val minima = Array(
+	20150826, 20150803, 20150708, 20150507, 20150206, 20150119, 20141027, 
+	20140828, 20140619, 20140519, 20140320, 20140120, 20131113, 20130729, 
+	20130627, 20130502, 20130415, 20121203, 20120926, 20120905, 20120731, 
+	20120329)
+
+	def preprocess(df: DataFrame) = {
+		"""
+		Convert GDELT files into a format for DecisionTree
+		"""
+		val df = df.filter("EventRootCode != '--'")
+    	val df = df.filter("EventRootCode != 'X'")
 
 
-		val dates = Array(20150612, 20150826, 20150126, 20150206, 20141009, 20141027, 20140616, 20140619, 20140410, 20140428, 20140219, 20140320, 20131204, 20140120, 20130912, 20131113, 20130529, 20130627, 20130206, 20130502, 20121022, 20121203, 20120910, 20120926, 20120504, 20120905, 20120302, 20120329)
+	    val categoricalFeaturesInfo = Map(
+	        0 -> df.select("IsRootEvent").distinct().count(), 
+	        1 -> df.select("EventCode").distinct().count(),
+	        2 -> df.select("EventBaseCode").distinct().count(),
+	        3 -> df.select("EventRootCode").distinct().count(),
+	        4 -> df.select("QuadClass").distinct().count())
 
-		// val df = sqlContext.load("com.databricks.spark.csv", eventsSchema,Map("path" -> "s3n://gdelt-em/data/*", "header" -> "true", "delimiter" -> "\t"))
-
-		val df = sqlContext.read.format("com.databricks.spark.csv").schema(eventsSchema).option("header","true").option("delimiter","\t").load("s3n://gdelt-em/data_test/*")
-
-		val coder: (Int => Int) = (arg: Int) => {if (dates contains arg) 1 else 0}
+		val coder: (Int => Float) = (dates: Int) => {
+			if (dates contains maxima) {return 1.0}
+			else if (dates contains minima) {return 2.0}
+			else {return 0.0}
+		}
 		val labeler = udf(coder)
 
 		val data = df.select(df("SQLDATE"),df("IsRootEvent"),df("EventCode"),df("EventBaseCode"),df("EventRootCode"),df("QuadClass"),df("GoldsteinScale"),df("NumMentions"),df("NumSources"),df("NumArticles"),df("AvgTone"))
 
 		dataset.withColumn("Label",labeler(dataset.col("SQLDATE")))
+
+	}
+
+	def main(args: Array[String]) {
+		val conf = new SparkConf().setAppName("GDT-mllib")
+		val sc = new SparkContext(conf)
+
+		val hadoopConf = sc.hadoopConfiguration
+		hadoopConf.set("fs.s3.impl", "org.apache.hadoop.fs.s3native.NativeS3FileSystem")
+		hadoopConf.set("fs.s3.awsAccessKeyId", "AKIAJHVWLYZ6FJPPCYEA")
+		hadoopConf.set("fs.s3.awsSecretAccessKey", "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")
+
+		// val data = sc.textFile("s3n://gdelt-em/data/*").cache()
+		// val rowRDD = data.map(_.split("\t")).map(d => Row.fromSeq(d.toSeq))
+		val sqlContext = new org.apache.spark.sql.SQLContext(sc)
+				
+		// val df = sqlContext.createDataFrame(rowRDD, eventsSchema)
+		// val df = sqlContext.load("com.databricks.spark.csv", eventsSchema,Map("path" -> "s3n://gdelt-em/data/*", "header" -> "true", "delimiter" -> "\t"))
+
+		val filename = "s3n://gdelt-em/data/20150824.export.CSV"
+		val df = sqlContext.read.format("com.databricks.spark.csv").schema(eventsSchema).option("header","true").option("delimiter","\t").load(filename)
+
+		(data, categoricalFeaturesInfo, labels) = preprocess(df)
+
+
 
 
 

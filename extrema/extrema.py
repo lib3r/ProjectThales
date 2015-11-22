@@ -5,7 +5,7 @@ import MySQLdb as mdb
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
 import dateutil.parser
-from event_days import peakdetect
+from eventDays import peakdetect
 import pylab
 
 import matplotlib.image as mpimg

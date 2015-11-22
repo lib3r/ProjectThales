@@ -1,0 +1,18 @@
+Summary Stats                                                                   
+Precision = 0.874699976336
+Recall = 0.874699976336
+F1 Score = 0.874699976336
+Class 0.0 precision = 0.993174517096                                            
+Class 0.0 recall = 0.879903081562
+Class 0.0 F1 Measure = 0.933113842959
+Class 1.0 precision = 0.0258900658634
+Class 1.0 recall = 0.322251605591
+Class 1.0 F1 Measure = 0.0479294263078
+Class 2.0 precision = 0.0298056092703
+Class 2.0 recall = 0.369369369369
+Class 2.0 F1 Measure = 0.0551601662877
+Weighted recall = 0.874699976336
+Weighted precision = 0.983627970108
+Weighted F(1) Score = 0.924402017733
+Weighted F(0.5) Score = 0.959009533724
+Weighted false positive rate = 0.599657950819

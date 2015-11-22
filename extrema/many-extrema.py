@@ -1,4 +1,4 @@
-from event_days import peakdetect
+from eventDays import peakdetect
 from collections import defaultdict
 import pandas as pd
 import pandas.io.sql as psql
