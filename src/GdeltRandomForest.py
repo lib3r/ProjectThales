@@ -271,7 +271,7 @@ if __name__ == "__main__":
     (trainingData, testData) = data.randomSplit([0.7, 0.3])
 
     # Train a RandomForest model.
-    rf = RandomForestClassifier(labelCol="indexedLabel", featuresCol="indexedFeatures", maxBins=40, featureSubsetStrategy="auto", seed=12345)
+    rf = RandomForestClassifier(labelCol="indexedLabel", featuresCol="indexedFeatures", maxDepth=25, maxBins=40, featureSubsetStrategy="auto", seed=12345)
 
     # Chain indexers and tree in a Pipeline
     pipeline = Pipeline(stages=[labelIndexer, featureIndexer, rf])
