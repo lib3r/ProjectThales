@@ -116,11 +116,15 @@ def event_pipeline(dataset):
     EventBaseCodeI = StringIndexer(inputCol="EventBaseCode", outputCol="EventBaseCodeI")
     EventRootCodeI = StringIndexer(inputCol="EventRootCode", outputCol="EventRootCodeI")
     assembler = VectorAssembler(inputCols=["IsRootEvent", "EventCodeI", "EventBaseCodeI","EventRootCodeI", "QuadClass","GoldsteinScale","NumMentions","NumSources","NumArticles","AvgTone"], outputCol="features")
-    pipeline = Pipeline(stages=[EventCodeI, EventBaseCodeI, EventRootCodeI,assembler])
+    featureIndexer =\
+        VectorIndexer(inputCol="features", outputCol="indexedFeatures", maxCategories=310)
+    pipeline = Pipeline(stages=[EventCodeI, EventBaseCodeI, EventRootCodeI,assembler,featureIndexer])
     model = pipeline.fit(dataset)
     output = model.transform(dataset)
+    
     data = output.map(lambda row: LabeledPoint(row[0], row[-1])).cache()
-
+    print "Data:"
+    print data.take(1)
     return data
 
 def preprocess(df):
@@ -130,32 +134,25 @@ def preprocess(df):
     # remove troublesome rows
     df = df.filter("EventRootCode != '--'")
     df = df.filter("EventRootCode != 'X'")
-
-
     # fix event columns
     # df = fix_events(df,"EventCode",df.EventCode)
     # df = fix_events(df,"EventBaseCode",df.EventBaseCode)
     # df = fix_events(df,"EventRootCode",df.EventRootCode)
-
-
     # add label to df
     labeler = udf(label, FloatType())
     df = df.withColumn('Label',labeler(df.SQLDATE)).cache()
     # df = df.withColumn('Label',df.SQLDATE.isin(dates))
-
     categoricalFeaturesInfo = {
         0: df.select("IsRootEvent").distinct().count(), 
         1: df.select("EventCode").distinct().count(),
         2: df.select("EventBaseCode").distinct().count(),
         3: df.select("EventRootCode").distinct().count(),
         4: df.select("QuadClass").distinct().count()}
-
     labels = df.map(lambda lp: lp.Label).distinct().collect()
     print "DataFrame:"
     print df.take(1)
     # print "Label Counts:"
     # df.select("EventCode").groupby("EventCode").count().show()
-
     # Feature Selection
     dataset = df.select("Label","IsRootEvent", "EventCode", "EventBaseCode","EventRootCode", "QuadClass","GoldsteinScale","NumMentions","NumSources","NumArticles","AvgTone").cache()
     df.unpersist()
@@ -166,7 +163,6 @@ def preprocess(df):
     dataset.unpersist()
     # data = dataset.map(lambda row: LabeledPoint(row[0], row[1:]))
     # data.cache()
-
     return data, categoricalFeaturesInfo, labels
 
 def evaluate(labelsAndPredictions, data, labels):
@@ -201,17 +197,10 @@ if __name__ == "__main__":
     sc = SparkContext(appName = "GdeltDT-MLlib")
     sqlContext = SQLContext(sc)
         
-    dataPath = "s3n://gdelt-em/data/*"
-    df = sqlContext.read.format("com.databricks.spark.csv").options(header = "true", delimiter="\t").load(dataPath, schema = eventsSchema)
+    dataPath = "s3n://gdelt-em/data_test/*"
+    df = sqlContext.read.format("com.databricks.spark.csv").options(header = "true", delimiter="\t").load(dataPath, schema = eventsSchema).repartition(200) 
 
     (data, categoricalFeaturesInfo, labels) = preprocess(df)
-
-    # Fix Features for DT, very hack-y
-    featureIndexer =\
-        VectorIndexer(inputCol="features", outputCol="indexedFeatures", maxCategories=310).fit(data.toDF())
-    data = featureIndexer.transform(data.toDF()).drop("features").rdd.map(lambda row: LabeledPoint(row[0], row[-1]))
-    print "Data:"
-    print data.take(1)
     
     # Cross-validation
     (trainingData, testData) = data.randomSplit([0.7, 0.3])
