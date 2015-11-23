@@ -257,27 +257,3 @@ if __name__ == "__main__":
 
     evaluate(predictions)
     sc.stop()
-
-    '''
-    # Select example rows to display.
-    predictions.select("prediction", "indexedLabel", "features").show(5)
-
-    predictionAndLabels = predictions.select("prediction", "indexedLabel").rdd
-    metrics = MulticlassMetrics(predictionAndLabels)
-    print metrics.confusionMatrix().toArray()
-    print "False Positive of Label 0 %f " % metrics.falsePositiveRate(0.0)
-    print "Precision %f " % metrics.precision()
-    print "Weighted False Positive %f" % metrics.weightedFalsePositiveRate
-    print "Weighted Precision %f" % metrics.weightedPrecision
-    print "Weighted FScore %f" % metrics.weightedFMeasure()
-
-    # Select (prediction, true label) and compute test error
-    #evaluator = MulticlassClassificationEvaluator(labelCol="indexedLabel", predictionCol="prediction", metricName="f1")
-    
-    #accuracy = evaluator.evaluate(predictions)
-
-    #print "Test Error = %g" % (1.0 - accuracy)
-
-    treeModel = model.stages[2]
-    print treeModel  # summary only
-    '''

@@ -94,7 +94,7 @@ object GdeltMultiClassSVM {
 
 	def preprocess(df: DataFrame) = {
 		"""
-		Convert GDELT files into a format for DecisionTree
+		Convert GDELT files into a format for SVM
 		"""
 		val df = df.filter("EventRootCode != '--'")
     	val df = df.filter("EventRootCode != 'X'")
@@ -136,6 +136,27 @@ object GdeltMultiClassSVM {
 
 		val predictions = ovrModel.transform(test).select("prediction", "Label")
 		val predictionsAndLabels = predictions.map {case Row(p: Double, l: Double) => (p, l)}
+	
+		val metrics = new MulticlassMetrics(predictionsAndLabels)
+		val numClasses = 3
+
+		println("Summary Stats")
+		println("Precision = " + metrics.precision)
+		println("Recall = " + metrics.recall)
+		println("F1 Score = " + metrics.fMeasure)
+		(0 until numClasses).foreach { index =>
+			val label = index.toDouble
+			println("Class " + label + " precision = " + metrics.precision(label))
+			println("Class " + label + " recall = " + metrics.recall(label))
+			println("Class " + label + " F1 Score = " + metrics.fMeasure(label, 1.0))
+		}
+		println("Weighted recall = " + metrics.weightedRecall)
+		println("Weighted precision = " + metrics.weightedPrecision)
+		println("Weighted F(1) Score = " + metrics.weightedFmeasure)
+		println("Weighted F(0.5) Score = " + metrics.weightedFmeasure(0.5))
+		println("Weighted False Positive Rate = " + metrics.weightedFalsePositiveRate)
+
+		sc.stop()
 	}
 
 }
