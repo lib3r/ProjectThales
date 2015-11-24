@@ -207,11 +207,6 @@ object GdeltSandbox {
 		val conf = new SparkConf().setAppName("GDT-mllib")
 		val sc = new SparkContext(conf)
 
-		// val hadoopConf = sc.hadoopConfiguration
-		// hadoopConf.set("fs.s3.impl", "org.apache.hadoop.fs.s3native.NativeS3FileSystem")
-		// hadoopConf.set("fs.s3.awsAccessKeyId", "AKIAJHVWLYZ6FJPPCYEA")
-		// hadoopConf.set("fs.s3.awsSecretAccessKey", "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")
-
 		val sqlContext = new org.apache.spark.sql.SQLContext(sc)
 	
 		val filename = "s3n://gdelt-em/data/20150824.export.CSV"
