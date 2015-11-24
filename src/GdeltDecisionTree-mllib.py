@@ -121,7 +121,7 @@ def event_pipeline(dataset):
     pipeline = Pipeline(stages=[EventCodeI, EventBaseCodeI, EventRootCodeI,assembler,featureIndexer])
     model = pipeline.fit(dataset)
     output = model.transform(dataset)
-    
+
     data = output.map(lambda row: LabeledPoint(row[0], row[-1])).cache()
     print "Data:"
     print data.take(1)
@@ -205,11 +205,10 @@ if __name__ == "__main__":
     # Cross-validation
     (trainingData, testData) = data.randomSplit([0.7, 0.3])
 
-    data.unpersist()
     # Train a DecisionTree model.
     #  Empty categoricalFeaturesInfo indicates all features are continuous.
     model = DecisionTree.trainClassifier(trainingData, numClasses=3, categoricalFeaturesInfo=categoricalFeaturesInfo,
-                                         impurity='gini', maxDepth=15, maxBins=500)
+                                         impurity='gini', maxDepth=30, maxBins=500)
 
     # Evaluate model on test instances and compute test error
     predictions = model.predict(testData.map(lambda x: x.features))

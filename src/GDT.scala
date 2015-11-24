@@ -93,6 +93,87 @@ object GdeltSandbox {
 	20130627, 20130502, 20130415, 20121203, 20120926, 20120905, 20120731, 
 	20120329)
 
+	def evaluate() = {
+		// Instantiate metrics object
+	    val metrics = new MulticlassMetrics(predictionAndLabels)
+
+	    // Confusion matrix
+	    println("Confusion matrix:")
+	    println(metrics.confusionMatrix)
+
+	    // Overall Statistics
+	    val precision = metrics.precision
+	    val recall = metrics.recall // same as true positive rate
+	    val f1Score = metrics.fMeasure
+	    println("Summary Statistics")
+	    println(s"Precision = $precision")
+	    println(s"Recall = $recall")
+	    println(s"F1 Score = $f1Score")
+
+	    // Precision by label
+	    val labels = metrics.labels
+	    labels.foreach { l =>
+	      println(s"Precision($l) = " + metrics.precision(l))
+	    }
+
+	    // Recall by label
+	    labels.foreach { l =>
+	      println(s"Recall($l) = " + metrics.recall(l))
+	    }
+
+	    // False positive rate by label
+	    labels.foreach { l =>
+	      println(s"FPR($l) = " + metrics.falsePositiveRate(l))
+	    }
+
+	    // F-measure by label
+	    labels.foreach { l =>
+	      println(s"F1-Score($l) = " + metrics.fMeasure(l))
+	    }
+
+	    // Weighted stats
+	    println(s"Weighted precision: ${metrics.weightedPrecision}")
+	    println(s"Weighted recall: ${metrics.weightedRecall}")
+	    println(s"Weighted F1 score: ${metrics.weightedFMeasure}")
+	    println(s"Weighted false positive rate: ${metrics.weightedFalsePositiveRate}")
+
+	}
+
+	def event_pipeline(dataset) = {
+	    """
+	    """
+	    val EventCodeI = new StringIndexer()
+	    	.setInputCol("EventCode")
+	    	.setOutputCol("EventCodeI")
+
+	    val EventBaseCodeI = new StringIndexer()
+	    	.setInputCol("EventBaseCode")
+	    	.setOutputCol("EventBaseCodeI")
+
+	    val EventRootCodeI = new StringIndexer().
+	    	.setInputCol("EventRootCode")
+	    	.setOutputCol("EventRootCodeI")
+	    
+	    val assembler = new VectorAssembler()
+	    	.setInputCols(Array("IsRootEvent", "EventCodeI", "EventBaseCodeI","EventRootCodeI", "QuadClass","GoldsteinScale","NumMentions","NumSources","NumArticles","AvgTone")
+	    	.setOutputCol("features")
+	    
+	    val featureIndexer = new VectorIndexer()
+	    	.setInputCol("features")
+	    	.setOutputCol("indexedFeatures")
+	    	.setMaxCategories(310)
+
+	    val pipeline = new Pipeline()
+	    	.setStages(Array(EventCodeI, EventBaseCodeI, EventRootCodeI, assembler,featureIndexer))
+	    
+	    val model = pipeline.fit(dataset)
+	    val output = model.transform(dataset)
+
+	    val data = output.map(row => LabeledPoint(row(0), row.last).cache()
+	    print "Data:"
+	    print data.take(1)
+    }
+
 	def preprocess(df: DataFrame) = {
 		"""
 		Convert GDELT files into a format for DecisionTree
@@ -114,10 +195,11 @@ object GdeltSandbox {
 			else {return 0.0}
 		}
 		val labeler = udf(coder)
+		df.withColumn("Label",labeler(dataset.col("SQLDATE")))
 
-		val data = df.select(df("SQLDATE"),df("IsRootEvent"),df("EventCode"),df("EventBaseCode"),df("EventRootCode"),df("QuadClass"),df("GoldsteinScale"),df("NumMentions"),df("NumSources"),df("NumArticles"),df("AvgTone"))
+		val dataset = df.select(df("SQLDATE"),df("IsRootEvent"),df("EventCode"),df("EventBaseCode"),df("EventRootCode"),df("QuadClass"),df("GoldsteinScale"),df("NumMentions"),df("NumSources"),df("NumArticles"),df("AvgTone"))
 
-		dataset.withColumn("Label",labeler(dataset.col("SQLDATE")))
+		data = event_pipeline(dataset)
 
 	}
 
@@ -125,18 +207,13 @@ object GdeltSandbox {
 		val conf = new SparkConf().setAppName("GDT-mllib")
 		val sc = new SparkContext(conf)
 
-		val hadoopConf = sc.hadoopConfiguration
-		hadoopConf.set("fs.s3.impl", "org.apache.hadoop.fs.s3native.NativeS3FileSystem")
-		hadoopConf.set("fs.s3.awsAccessKeyId", "AKIAJHVWLYZ6FJPPCYEA")
-		hadoopConf.set("fs.s3.awsSecretAccessKey", "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")
+		// val hadoopConf = sc.hadoopConfiguration
+		// hadoopConf.set("fs.s3.impl", "org.apache.hadoop.fs.s3native.NativeS3FileSystem")
+		// hadoopConf.set("fs.s3.awsAccessKeyId", "AKIAJHVWLYZ6FJPPCYEA")
+		// hadoopConf.set("fs.s3.awsSecretAccessKey", "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")
 
-		// val data = sc.textFile("s3n://gdelt-em/data/*").cache()
-		// val rowRDD = data.map(_.split("\t")).map(d => Row.fromSeq(d.toSeq))
 		val sqlContext = new org.apache.spark.sql.SQLContext(sc)
-				
-		// val df = sqlContext.createDataFrame(rowRDD, eventsSchema)
-		// val df = sqlContext.load("com.databricks.spark.csv", eventsSchema,Map("path" -> "s3n://gdelt-em/data/*", "header" -> "true", "delimiter" -> "\t"))
-
+	
 		val filename = "s3n://gdelt-em/data/20150824.export.CSV"
 		val df = sqlContext.read.format("com.databricks.spark.csv").schema(eventsSchema).option("header","true").option("delimiter","\t").load(filename)
 
@@ -148,7 +225,6 @@ object GdeltSandbox {
 
 		// Save CSV
 		dataset.save("com.databricks.spark.csv", SaveMode.ErrorIfExists,Map("path" -> "s3n://gdelt-em/out/libsvm.csv","header"->"true"))
-			
 
-			// needs to be tab deliminated
-			// val df = sqlContext.read.format("com.databricks.spark.csv").option("delimiter","\t").load("s3n://gdelt-em/data_test/*")
+
+		
